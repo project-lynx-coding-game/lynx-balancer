@@ -1,7 +1,24 @@
 mod instance_host;
 
-use actix_web::{post, App, HttpResponse, HttpServer, Responder};
+use crate::instance_host::{InstanceHost, Instance};
+
+use actix_web::{web, post, App, HttpResponse, HttpServer, Responder};
 use clap::Parser;
+use serde::{Deserialize, Serialize};
+
+struct AppState {
+    instance_host: InstanceHost,
+}
+
+async fn start_instance(data: web::Data<AppState>) -> HttpResponse {
+    data.instance_host.start_instance();
+    HttpResponse::Ok().body("done")
+}
+
+async fn stop_instance(data: web::Data<AppState>, request: web::Json<Instance>) -> HttpResponse {
+    data.instance_host.stop_instance(request.into_inner());
+    HttpResponse::Ok().body("done")
+}
 
 #[post("/echo")]
 async fn echo(req_body: String) -> impl Responder {
@@ -20,7 +37,18 @@ struct Args {
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
     
-    HttpServer::new(|| App::new().service(echo))
+    HttpServer::new(||
+        App::new()
+            .app_data(web::Data::new(AppState {
+                instance_host: InstanceHost::new(),
+            }))
+            .service(
+                web::scope("/instance_host")
+                .service(web::resource("/start").route(web::post().to(start_instance)))
+                .service(web::resource("/stop").route(web::post().to(stop_instance)))
+            )
+            .service(echo)
+    )
     .bind(("127.0.0.1", args.port))?
     .run()
     .await
