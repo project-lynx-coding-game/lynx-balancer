@@ -17,7 +17,7 @@
    * [ ] Complete trait
    * [ ] PostgreSQL implementation
  * Others:
-   * [ ] Commandline arguments parsing
+   * [x] Commandline arguments parsing
    * [ ] [Optional] Config file
    * [ ] [Optional] Proxy redirect 
    * [ ] Latency benchmark
