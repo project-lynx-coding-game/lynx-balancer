@@ -1,13 +1,14 @@
 mod instance_host;
 
 use crate::instance_host::{InstanceHost, Instance};
+use crate::instance_host::kubernetes_host::KubernetesHost;
 
 use actix_web::{web, post, App, HttpResponse, HttpServer, Responder};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 
 struct AppState {
-    instance_host: InstanceHost,
+    instance_host: Box<dyn InstanceHost>,
 }
 
 async fn start_instance(data: web::Data<AppState>) -> HttpResponse {
@@ -40,7 +41,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(||
         App::new()
             .app_data(web::Data::new(AppState {
-                instance_host: InstanceHost::new(),
+                instance_host: Box::new(KubernetesHost::new()),
             }))
             .service(
                 web::scope("/instance_host")
