@@ -1,4 +1,4 @@
-use crate::instance_host::{InstanceHost, Instance};
+use crate::instance_host::{Instance, InstanceHost};
 
 pub struct KubernetesHost {}
 

@@ -1,10 +1,10 @@
-mod instance_host;
 mod cache_provider;
+mod instance_host;
 
-use crate::instance_host::{InstanceHost, Instance};
 use crate::instance_host::kubernetes_host::KubernetesHost;
+use crate::instance_host::{Instance, InstanceHost};
 
-use actix_web::{web, post, App, HttpResponse, HttpServer, Responder};
+use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 
@@ -32,25 +32,25 @@ async fn echo(req_body: String) -> impl Responder {
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Port number
-   port: u16
+    port: u16,
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
-    
-    HttpServer::new(||
+
+    HttpServer::new(|| {
         App::new()
             .app_data(web::Data::new(AppState {
                 instance_host: Box::new(KubernetesHost::new()),
             }))
             .service(
                 web::scope("/instance_host")
-                .service(web::resource("/start").route(web::post().to(start_instance)))
-                .service(web::resource("/stop").route(web::post().to(stop_instance)))
+                    .service(web::resource("/start").route(web::post().to(start_instance)))
+                    .service(web::resource("/stop").route(web::post().to(stop_instance))),
             )
             .service(echo)
-    )
+    })
     .bind(("127.0.0.1", args.port))?
     .run()
     .await
