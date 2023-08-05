@@ -1,4 +1,5 @@
 mod instance_host;
+mod cache_provider;
 
 use crate::instance_host::{InstanceHost, Instance};
 use crate::instance_host::kubernetes_host::KubernetesHost;
