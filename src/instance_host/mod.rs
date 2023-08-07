@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Instance {
-    url: String,
-    port: u16,
+    pub url: String,
+    pub port: u16,
 }
 
 impl Instance {

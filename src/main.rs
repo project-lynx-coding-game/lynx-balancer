@@ -7,18 +7,29 @@ use crate::instance_host::{Instance, InstanceHost};
 use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+
 
 struct AppState {
-    instance_host: Box<dyn InstanceHost>,
+    instance_host: RefCell<Box<dyn InstanceHost>>,
 }
 
 async fn start_instance(data: web::Data<AppState>) -> HttpResponse {
-    data.instance_host.start_instance();
-    HttpResponse::Ok().body("done")
+    let new_instance = data.instance_host.borrow_mut().start_instance().await;
+    match new_instance {
+        Ok(instance) => {
+            HttpResponse::Ok().body(instance.url)
+        },
+        Err(e) => {
+            eprintln!("Error: {e}");
+            HttpResponse::InternalServerError().body("Oh no error baby")
+        }
+    }
+    
 }
 
 async fn stop_instance(data: web::Data<AppState>, request: web::Json<Instance>) -> HttpResponse {
-    data.instance_host.stop_instance(request.into_inner());
+    data.instance_host.borrow().stop_instance(request.into_inner());
     HttpResponse::Ok().body("done")
 }
 
@@ -42,7 +53,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .app_data(web::Data::new(AppState {
-                instance_host: Box::new(KubernetesHost::new()),
+                instance_host: RefCell::new(Box::new(KubernetesHost::new())),
             }))
             .service(
                 web::scope("/instance_host")

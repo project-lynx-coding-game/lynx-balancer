@@ -1309,10 +1309,12 @@ dependencies = [
  "actix-web",
  "async-trait",
  "clap",
+ "hyper",
  "k8s-openapi",
  "kube",
  "serde",
  "serde_json",
+ "tower",
 ]
 
 [[package]]
