@@ -8,7 +8,7 @@ pub struct LocalCache<K: Eq + Hash, V> {
 }
 
 impl<K: Eq + Hash, V> LocalCache<K, V> {
-    fn new() -> LocalCache<K, V> {
+    pub fn new() -> LocalCache<K, V> {
         LocalCache {
             map: HashMap::new(),
         }
