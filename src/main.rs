@@ -2,40 +2,42 @@ mod cache_provider;
 mod instance_host;
 
 use crate::instance_host::kubernetes_host::KubernetesHost;
-use crate::instance_host::{Instance, InstanceHost};
+use crate::instance_host::InstanceHost;
 
-use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpResponse, HttpServer};
 use clap::Parser;
-use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-
 
 struct AppState {
     instance_host: RefCell<Box<dyn InstanceHost>>,
 }
 
 async fn start_instance(data: web::Data<AppState>) -> HttpResponse {
-    let new_instance = data.instance_host.borrow_mut().start_instance().await;
+    let new_instance = data
+        .instance_host
+        .borrow_mut()
+        .start_instance("test-user".to_string())
+        .await;
     match new_instance {
-        Ok(instance) => {
-            HttpResponse::Ok().body(instance.url)
-        },
+        Ok(instance) => HttpResponse::Ok().body(instance.url),
         Err(e) => {
             eprintln!("Error: {e}");
             HttpResponse::InternalServerError().body("Oh no error baby")
         }
     }
-    
 }
 
-async fn stop_instance(data: web::Data<AppState>, request: web::Json<Instance>) -> HttpResponse {
-    data.instance_host.borrow().stop_instance(request.into_inner());
+async fn stop_instance(data: web::Data<AppState>) -> HttpResponse {
+    match data
+        .instance_host
+        .borrow()
+        .stop_instance("test-user".to_string())
+        .await
+    {
+        Ok(_) => (),
+        Err(_) => return HttpResponse::InternalServerError().body("Instance could not be stopped"),
+    }
     HttpResponse::Ok().body("done")
-}
-
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
 }
 
 /// Lynx balancer
@@ -43,6 +45,7 @@ async fn echo(req_body: String) -> impl Responder {
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Port number
+    #[arg(default_value_t = 8080)]
     port: u16,
 }
 
@@ -50,17 +53,22 @@ struct Args {
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    match tracing::subscriber::set_global_default(subscriber) {
+        Ok(_) => (),
+        Err(_) => println!("ERROR tracing could not be enabled!"),
+    }
+
     HttpServer::new(|| {
         App::new()
             .app_data(web::Data::new(AppState {
                 instance_host: RefCell::new(Box::new(KubernetesHost::new())),
             }))
             .service(
-                web::scope("/instance_host")
+                web::scope("/instance")
                     .service(web::resource("/start").route(web::post().to(start_instance)))
                     .service(web::resource("/stop").route(web::post().to(stop_instance))),
             )
-            .service(echo)
     })
     .bind(("127.0.0.1", args.port))?
     .run()

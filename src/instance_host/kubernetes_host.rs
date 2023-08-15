@@ -1,47 +1,73 @@
 use crate::instance_host::{Instance, InstanceHost};
 
-use kube::{Client, Config, client::ConfigExt, api::{Api, ResourceExt, ListParams, PostParams}};
-use k8s_openapi::api::core::v1::Pod;
 use async_trait::async_trait;
-use tower::ServiceBuilder;
-use k8s_openapi::http::Uri;
+use k8s_openapi::api::batch::v1::Job;
+use kube::{
+    api::{Api, DeleteParams, PostParams},
+    Client,
+};
+use tracing::info;
 
-pub struct KubernetesHost {
-    instances: Vec<Box<Instance>>
-}
+pub struct KubernetesHost {}
 
 impl KubernetesHost {
     pub fn new() -> KubernetesHost {
-        KubernetesHost {
-            instances: Vec::new()
-        }
+        KubernetesHost {}
     }
 }
 
 #[async_trait]
 impl InstanceHost for KubernetesHost {
-    async fn start_instance(&mut self) -> Result<Instance, Box<dyn std::error::Error>> {
-        let config = Config::new("server.kubernetes.blazej-smorawski.com".parse::<Uri>().unwrap());
-        let service = ServiceBuilder::new()
-            .layer(config.base_uri_layer())
-            .option_layer(config.auth_layer()?)
-            .service(hyper::Client::new());
-        let client = Client::new(service, config.default_namespace);
+    async fn start_instance(
+        &mut self,
+        username: String,
+    ) -> Result<Instance, Box<dyn std::error::Error>> {
+        let client = Client::try_default().await?;
+        let jobs: Api<Job> = Api::default_namespaced(client);
 
-        let pods: Api<Pod> = Api::default_namespaced(client);
-        for p in pods.list(&ListParams::default()).await? {
-            println!("found pod {}", p.name_any());
-        }
+        info!("Creating job for user: {}", username);
+        let name = username;
+        let data = serde_json::from_value(serde_json::json!({
+            "apiVersion": "batch/v1",
+            "kind": "Job",
+            "metadata": {
+                "name": name,
+            },
+            "spec": {
+                "template": {
+                    "metadata": {
+                        "name": "empty-job-pod"
+                    },
+                    "spec": {
+                        "containers": [{
+                            "name": "shell",
+                            "image": "busybox",
+                            "command": ["/bin/sh",  "-c", "for i in 9 8 7 6 5 4 3 2 1 ; do echo $i ; sleep 100 ; done"]
+                        }],
+                        "restartPolicy": "Never",
+                    }
+                }
+            }
+        }))?;
+        jobs.create(&PostParams::default(), &data).await?;
+
+        // TODO: fetch IP of pod created for the job
+        jobs.get(&name).await?;
+
 
         let instance = Instance::new(String::from("xd"), 9000);
-        self.instances.push(Box::new(instance.clone()));
 
-        println!("{:?}", instance);
         Ok(instance)
     }
 
-    fn stop_instance(&self, instance: Instance) {
-        println!("{:?}", instance);
-        todo!()
+    async fn stop_instance(&self, username: String) -> Result<(), Box<dyn std::error::Error>> {
+        let client = Client::try_default().await?;
+        let jobs: Api<Job> = Api::default_namespaced(client);
+
+        info!("Cleaning up job for: {}", username);
+
+        let name = username;
+        jobs.delete(&name, &DeleteParams::background()).await?;
+        Ok(())
     }
 }

@@ -11,15 +11,15 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(url: String, port: u16) -> Instance {
-        Instance {
-            url, port
-        }
+        Instance { url, port }
     }
 }
 
 #[async_trait]
 pub trait InstanceHost {
-    async fn start_instance(&mut self) -> Result<Instance, Box<dyn std::error::Error>>;
-
-    fn stop_instance(&self, instance: Instance);
+    async fn start_instance(
+        &mut self,
+        username: String,
+    ) -> Result<Instance, Box<dyn std::error::Error>>;
+    async fn stop_instance(&self, username: String) -> Result<(), Box<dyn std::error::Error>>;
 }
