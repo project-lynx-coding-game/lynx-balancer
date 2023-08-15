@@ -1,9 +1,10 @@
 use crate::instance_host::{Instance, InstanceHost};
 
 use async_trait::async_trait;
-use k8s_openapi::api::batch::v1::Job;
+use k8s_openapi::api::{batch::v1::Job, core::v1::Pod};
 use kube::{
-    api::{Api, DeleteParams, PostParams},
+    api::{Api, DeleteParams, ListParams, PostParams},
+    runtime::{conditions::is_pod_running, wait::await_condition},
     Client,
 };
 use tracing::info;
@@ -23,10 +24,10 @@ impl InstanceHost for KubernetesHost {
         username: String,
     ) -> Result<Instance, Box<dyn std::error::Error>> {
         let client = Client::try_default().await?;
-        let jobs: Api<Job> = Api::default_namespaced(client);
+        let jobs: Api<Job> = Api::default_namespaced(client.clone());
 
         info!("Creating job for user: {}", username);
-        let name = username;
+        let name = username.clone();
         let data = serde_json::from_value(serde_json::json!({
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -36,7 +37,7 @@ impl InstanceHost for KubernetesHost {
             "spec": {
                 "template": {
                     "metadata": {
-                        "name": "empty-job-pod"
+                        "name": "instance-dynamic-pod"
                     },
                     "spec": {
                         "containers": [{
@@ -51,11 +52,33 @@ impl InstanceHost for KubernetesHost {
         }))?;
         jobs.create(&PostParams::default(), &data).await?;
 
-        // TODO: fetch IP of pod created for the job
-        jobs.get(&name).await?;
+        let pods: Api<Pod> = Api::default_namespaced(client.clone());
+        let label = format!("job-name={}", name);
+        let lp = ListParams::default().labels(&label);
+        let mut name = "".to_string();
 
+        while name == "" {
+            for p in pods.list(&lp).await? {
+                if p.metadata.deletion_timestamp.is_some() {
+                    // Pod is terminating
+                    continue;
+                }
 
-        let instance = Instance::new(String::from("xd"), 9000);
+                name = p.metadata.name.unwrap();
+                info!("Pod name is: {}", name);
+                break;
+            }
+        }
+
+        let running = await_condition(pods.clone(), &name, is_pod_running());
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(15), running).await?;
+
+        let p = pods.get(&name).await?;
+        let status = p.status.unwrap();
+        let ip = status.pod_ip.unwrap();
+        info!("Pod created for {} was created at: {}", username, ip);
+
+        let instance = Instance::new(ip, 8080);
 
         Ok(instance)
     }
@@ -68,6 +91,7 @@ impl InstanceHost for KubernetesHost {
 
         let name = username;
         jobs.delete(&name, &DeleteParams::background()).await?;
+
         Ok(())
     }
 }
