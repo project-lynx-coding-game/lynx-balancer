@@ -11,6 +11,7 @@ use cache_provider::local_cache::LocalCache;
 use cache_provider::{CacheGetRequest, CacheProvider, CacheSetRequest};
 use clap::Parser;
 use futures::lock::Mutex;
+use instance_host::Instance;
 
 struct AppState {
     // It's quite complex but Sync and Send traits mean
@@ -39,10 +40,9 @@ async fn stop_instance(
     data: web::Data<Mutex<AppState>>,
     request: web::Json<Instance>,
 ) -> HttpResponse {
-    let mut data = data.lock().await;
+    let data = data.lock().await;
     match data
         .instance_host
-        .borrow()
         .stop_instance("test-user".to_string())
         .await
     {
