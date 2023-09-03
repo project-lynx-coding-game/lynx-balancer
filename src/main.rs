@@ -81,7 +81,6 @@ async fn cache_set(
 struct Args {
     /// Port number
     #[arg(default_value_t = 8080)]
-    #[arg(default_value_t = 8080)]
     port: u16,
     /// Port for cache server
     #[arg(default_value_t = 8081)]
@@ -91,12 +90,6 @@ struct Args {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
-
-    let subscriber = tracing_subscriber::FmtSubscriber::new();
-    match tracing::subscriber::set_global_default(subscriber) {
-        Ok(_) => (),
-        Err(_) => println!("ERROR tracing could not be enabled!"),
-    }
 
     let subscriber = tracing_subscriber::FmtSubscriber::new();
     match tracing::subscriber::set_global_default(subscriber) {
