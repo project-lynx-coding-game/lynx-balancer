@@ -2,7 +2,7 @@ mod cache_provider;
 mod instance_host;
 
 use crate::instance_host::kubernetes_host::KubernetesHost;
-use crate::instance_host::{Instance, InstanceHost};
+use crate::instance_host::InstanceHost;
 
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
@@ -22,8 +22,17 @@ struct AppState {
 
 async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     let mut data = data.lock().await;
-    data.instance_host.start_instance();
-    HttpResponse::Ok().body("done")
+    let new_instance = data
+        .instance_host
+        .start_instance("test-user".to_string())
+        .await;
+    match new_instance {
+        Ok(instance) => HttpResponse::Ok().body(instance.url),
+        Err(e) => {
+            eprintln!("Error: {e}");
+            HttpResponse::InternalServerError().body("Oh no error baby")
+        }
+    }
 }
 
 async fn stop_instance(
@@ -31,7 +40,15 @@ async fn stop_instance(
     request: web::Json<Instance>,
 ) -> HttpResponse {
     let mut data = data.lock().await;
-    data.instance_host.stop_instance(request.into_inner());
+    match data
+        .instance_host
+        .borrow()
+        .stop_instance("test-user".to_string())
+        .await
+    {
+        Ok(_) => (),
+        Err(_) => return HttpResponse::InternalServerError().body("Instance could not be stopped"),
+    }
     HttpResponse::Ok().body("done")
 }
 
@@ -69,6 +86,7 @@ async fn echo(req_body: String) -> impl Responder {
 struct Args {
     /// Port number
     #[arg(default_value_t = 8080)]
+    #[arg(default_value_t = 8080)]
     port: u16,
     /// Port for cache server
     #[arg(default_value_t = 8081)]
@@ -78,6 +96,18 @@ struct Args {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
+
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    match tracing::subscriber::set_global_default(subscriber) {
+        Ok(_) => (),
+        Err(_) => println!("ERROR tracing could not be enabled!"),
+    }
+
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    match tracing::subscriber::set_global_default(subscriber) {
+        Ok(_) => (),
+        Err(_) => println!("ERROR tracing could not be enabled!"),
+    }
 
     let data = Data::new(Mutex::new(AppState {
         instance_host: Box::new(KubernetesHost::new()),
@@ -90,11 +120,10 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(data.clone())
             .service(
-                web::scope("/instance_host")
+                web::scope("/instance")
                     .service(web::resource("/start").route(web::post().to(start_instance)))
                     .service(web::resource("/stop").route(web::post().to(stop_instance))),
             )
-            .service(echo)
     })
     .bind(("127.0.0.1", args.port))?
     .run();
