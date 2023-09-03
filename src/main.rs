@@ -6,12 +6,13 @@ use crate::instance_host::InstanceHost;
 
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
-use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpResponse, HttpServer};
 use cache_provider::local_cache::LocalCache;
 use cache_provider::{CacheGetRequest, CacheProvider, CacheSetRequest};
 use clap::Parser;
 use futures::lock::Mutex;
 use instance_host::Instance;
+use serde::{Deserialize, Serialize};
 
 struct AppState {
     // It's quite complex but Sync and Send traits mean
@@ -21,6 +22,11 @@ struct AppState {
     url_cache: Box<dyn CacheProvider<String, String> + Sync + Send>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct UserGetRequest {
+    username: String,
+}
+
 async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     let mut data = data.lock().await;
     let new_instance = data
@@ -28,7 +34,10 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
         .start_instance("test-user".to_string())
         .await;
     match new_instance {
-        Ok(instance) => HttpResponse::Ok().body(instance.url),
+        Ok(instance) => {
+            data.url_cache.set("test-user".to_string(), instance.url.clone());
+            HttpResponse::Ok().body(instance.url)
+        },
         Err(e) => {
             eprintln!("Error: {e}");
             HttpResponse::InternalServerError().body("Oh no error baby")
@@ -62,7 +71,7 @@ async fn cache_get(
         Some(url) => HttpResponse::Ok()
             .content_type(ContentType::plaintext())
             .body(url.clone()),
-        None => HttpResponse::Ok().body("zamn"),
+        None => HttpResponse::NotFound().finish(),
     }
 }
 
@@ -73,6 +82,19 @@ async fn cache_set(
     let mut data = data.lock().await;
     data.url_cache.set(info.key.clone(), info.value.clone());
     HttpResponse::Ok().finish()
+}
+
+async fn get(
+    data: web::Data<Mutex<AppState>>,
+    info: web::Query<UserGetRequest>,
+) -> HttpResponse {
+    let data = data.lock().await;
+    let url = data.url_cache.get(&info.username);
+    if let Some(url) = url {
+        HttpResponse::Ok().body(url.clone())
+    } else {
+        HttpResponse::NotFound().finish()
+    }
 }
 
 /// Lynx balancer
@@ -112,6 +134,7 @@ async fn main() -> std::io::Result<()> {
                     .service(web::resource("/start").route(web::post().to(start_instance)))
                     .service(web::resource("/stop").route(web::post().to(stop_instance))),
             )
+            .service(web::resource("/").route(web::get().to(get)))
     })
     .bind(("127.0.0.1", args.port))?
     .run();
