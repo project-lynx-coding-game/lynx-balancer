@@ -75,11 +75,6 @@ async fn cache_set(
     HttpResponse::Ok().finish()
 }
 
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
-
 /// Lynx balancer
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
