@@ -5,7 +5,6 @@ use k8s_openapi::api::{batch::v1::Job, core::v1::Pod};
 use kube::{
     api::{Api, DeleteParams, ListParams, PostParams},
     runtime::{conditions::is_pod_running, wait::await_condition},
-    Client,
 };
 use tracing::info;
 
@@ -15,24 +14,15 @@ impl KubernetesHost {
     pub fn new() -> KubernetesHost {
         KubernetesHost {}
     }
-}
-
-#[async_trait]
-impl InstanceHost for KubernetesHost {
-    async fn start_instance(
-        &mut self,
-        username: String,
-    ) -> Result<Instance, Box<dyn std::error::Error>> {
-        let client = Client::try_default().await?;
-        let jobs: Api<Job> = Api::default_namespaced(client.clone());
-
+    // TODO: we assume that job name = username. It probably should not be the case later. But it's ok for now.
+    async fn create_job(&self, username: String, client: kube::Client) -> Result<(), Box<dyn std::error::Error>> {
         info!("Creating job for user: {}", username);
-        let name = username.clone();
+        let jobs: Api<Job> = Api::default_namespaced(client);
         let data = serde_json::from_value(serde_json::json!({
             "apiVersion": "batch/v1",
             "kind": "Job",
             "metadata": {
-                "name": name,
+                "name": username,
             },
             "spec": {
                 "template": {
@@ -51,9 +41,12 @@ impl InstanceHost for KubernetesHost {
             }
         }))?;
         jobs.create(&PostParams::default(), &data).await?;
+        Ok(())
+    }
 
-        let pods: Api<Pod> = Api::default_namespaced(client.clone());
-        let label = format!("job-name={}", name);
+    async fn get_job_ip(&self, username: String, client: kube::Client) -> Result<String, Box<dyn std::error::Error>> {
+        let pods: Api<Pod> = Api::default_namespaced(client);
+        let label = format!("job-name={}", username);
         let lp = ListParams::default().labels(&label);
         let mut name = "".to_string();
 
@@ -77,6 +70,20 @@ impl InstanceHost for KubernetesHost {
         let status = p.status.unwrap();
         let ip = status.pod_ip.unwrap();
         info!("Pod created for {} was created at: {}", username, ip);
+        Ok(ip)
+    }
+}
+
+#[async_trait]
+impl InstanceHost for KubernetesHost {
+    async fn start_instance(
+        &mut self,
+        username: String,
+    ) -> Result<Instance, Box<dyn std::error::Error>> {
+        let client = kube::Client::try_default().await?;
+
+        self.create_job(username.clone(), client.clone()).await?;
+        let ip: String = self.get_job_ip(username.clone(), client.clone()).await?;
 
         let instance = Instance::new(ip, 8080);
 
@@ -84,7 +91,7 @@ impl InstanceHost for KubernetesHost {
     }
 
     async fn stop_instance(&self, username: String) -> Result<(), Box<dyn std::error::Error>> {
-        let client = Client::try_default().await?;
+        let client = kube::Client::try_default().await?;
         let jobs: Api<Job> = Api::default_namespaced(client);
 
         info!("Cleaning up job for: {}", username);
