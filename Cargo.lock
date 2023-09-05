@@ -1315,6 +1315,7 @@ dependencies = [
  "actix-web",
  "async-trait",
  "clap",
+ "futures",
  "hyper",
  "k8s-openapi",
  "kube",
