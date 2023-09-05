@@ -7,6 +7,8 @@ use crate::instance_host::InstanceHost;
 use actix_web::http::header::ContentType;
 use actix_web::web::Data;
 use actix_web::{web, App, HttpResponse, HttpServer};
+use actix_proxy::{IntoHttpResponse, SendRequestError};
+use awc;
 use cache_provider::local_cache::LocalCache;
 use cache_provider::{CacheGetRequest, CacheProvider, CacheSetRequest};
 use clap::Parser;
@@ -35,9 +37,10 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
         .await;
     match new_instance {
         Ok(instance) => {
-            data.url_cache.set("test-user".to_string(), instance.url.clone());
+            data.url_cache
+                .set("test-user".to_string(), instance.url.clone());
             HttpResponse::Ok().body(instance.url)
-        },
+        }
         Err(e) => {
             eprintln!("Error: {e}");
             HttpResponse::InternalServerError().body("Oh no error baby")
@@ -84,14 +87,15 @@ async fn cache_set(
     HttpResponse::Ok().finish()
 }
 
-async fn get(
-    data: web::Data<Mutex<AppState>>,
-    info: web::Query<UserGetRequest>,
-) -> HttpResponse {
+async fn get(data: web::Data<Mutex<AppState>>, info: web::Query<UserGetRequest>) -> HttpResponse {
+    // TODO: unpacking username from http request will be different, it has to be planned out
     let data = data.lock().await;
     let url = data.url_cache.get(&info.username);
     if let Some(url) = url {
-        HttpResponse::Ok().body(url.clone())
+        let client = awc::Client::default();
+        // assuming we put port into url in cache
+        let res = client.get(url).send().await.unwrap();
+        res.into_http_response()
     } else {
         HttpResponse::NotFound().finish()
     }

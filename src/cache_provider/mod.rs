@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub mod local_cache;
 
@@ -6,7 +6,6 @@ pub mod local_cache;
 pub struct CacheGetRequest<K> {
     pub key: K,
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CacheSetRequest<K, V> {
