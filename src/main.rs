@@ -94,7 +94,9 @@ async fn get(data: web::Data<Mutex<AppState>>, info: web::Query<UserGetRequest>)
     if let Some(url) = url {
         let client = awc::Client::default();
         // assuming we put port into url in cache
-        let res = client.get(url).send().await.unwrap();
+        // TODO: Find better way to do it
+        let body = serde_json::to_string(&info.into_inner()).unwrap();
+        let res = client.get(url).send_body(body).await.unwrap();
         res.into_http_response()
     } else {
         HttpResponse::NotFound().finish()
