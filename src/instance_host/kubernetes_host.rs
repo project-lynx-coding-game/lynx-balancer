@@ -35,9 +35,14 @@ impl KubernetesHost {
                     },
                     "spec": {
                         "containers": [{
-                            "name": "shell",
-                            "image": "busybox",
-                            "command": ["/bin/sh",  "-c", "for i in 9 8 7 6 5 4 3 2 1 ; do echo $i ; sleep 100 ; done"]
+                            "name": "scene-host",
+                            "image": "ghcr.io/group-project-gut/lynx-scene-host-python:latest",
+                            "args": ["main:app", "--port", "8080", "--host", "0.0.0.0", "--workers", "1"],
+                            "ports": [{"containerPort": 8080}],
+                            "env": [{
+                                "name": "LYNX_SCENE_GENERATOR_URL",
+                                "value":"http://lynx-scene-generator-service.lynx-scene-generator:8080/get_scene"
+                            }]
                         }],
                         "restartPolicy": "Never",
                     }
@@ -76,7 +81,7 @@ impl KubernetesHost {
 
         let p = pods.get(&name).await?;
         let status = p.status.unwrap();
-        let ip = status.pod_ip.unwrap();
+        let ip = status.pod_ip.unwrap() + ":8080";
         info!("Pod created for {} was created at: {}", username, ip);
         Ok(ip)
     }
