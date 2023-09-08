@@ -5,15 +5,14 @@ use crate::instance_host::kubernetes_host::KubernetesHost;
 use crate::instance_host::InstanceHost;
 
 use actix_web::http::header::ContentType;
-use actix_web::web::Data;
-use actix_web::{web, App, HttpResponse, HttpServer};
-use actix_proxy::{IntoHttpResponse, SendRequestError};
+use actix_web::web::{Data, Bytes};
+use actix_web::{web, App, HttpResponse, HttpServer, get, post};
+use actix_proxy::{IntoHttpResponse};
 use awc;
 use cache_provider::local_cache::LocalCache;
 use cache_provider::{CacheGetRequest, CacheProvider, CacheSetRequest};
 use clap::Parser;
 use futures::lock::Mutex;
-use instance_host::Instance;
 use serde::{Deserialize, Serialize};
 
 struct AppState {
@@ -50,7 +49,6 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
 
 async fn stop_instance(
     data: web::Data<Mutex<AppState>>,
-    request: web::Json<Instance>,
 ) -> HttpResponse {
     let data = data.lock().await;
     match data
@@ -87,16 +85,32 @@ async fn cache_set(
     HttpResponse::Ok().finish()
 }
 
-async fn get(data: web::Data<Mutex<AppState>>, info: web::Query<UserGetRequest>) -> HttpResponse {
+#[get("/{tail:.*}")]
+async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
     let data = data.lock().await;
-    let url = data.url_cache.get(&info.username);
+    let url = data.url_cache.get(&"test-user".to_string());
     if let Some(url) = url {
         let client = awc::Client::default();
-        // assuming we put port into url in cache
-        // TODO: Find better way to do it
-        let body = serde_json::to_string(&info.into_inner()).unwrap();
-        let res = client.get(url).send_body(body).await.unwrap();
+
+        let final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        let res = client.get(final_url).send_body(bytes).await.unwrap();
+        res.into_http_response()
+    } else {
+        HttpResponse::NotFound().finish()
+    }
+}
+
+#[post("/{tail:.*}")]
+async fn post_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
+    // TODO: unpacking username from http request will be different, it has to be planned out
+    let data = data.lock().await;
+    let url = data.url_cache.get(&"test-user".to_string());
+    if let Some(url) = url {
+        let client = awc::Client::default();
+
+        let final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        let res = client.post(final_url).send_body(bytes).await.unwrap();
         res.into_http_response()
     } else {
         HttpResponse::NotFound().finish()
@@ -113,6 +127,9 @@ struct Args {
     /// Port for cache server
     #[arg(default_value_t = 8081)]
     cache_port: u16,
+    /// Port for proxy server
+    #[arg(default_value_t = 8082)]
+    proxy_port: u16,
 }
 
 #[actix_web::main]
@@ -131,6 +148,7 @@ async fn main() -> std::io::Result<()> {
     }));
 
     let cache_server_data = data.clone();
+    let proxy_data = data.clone();
 
     let balancer = HttpServer::new(move || {
         App::new()
@@ -140,7 +158,6 @@ async fn main() -> std::io::Result<()> {
                     .service(web::resource("/start").route(web::post().to(start_instance)))
                     .service(web::resource("/stop").route(web::post().to(stop_instance))),
             )
-            .service(web::resource("/").route(web::get().to(get)))
     })
     .bind(("127.0.0.1", args.port))?
     .run();
@@ -155,7 +172,16 @@ async fn main() -> std::io::Result<()> {
     .bind(("127.0.0.1", args.cache_port))?
     .run();
 
-    futures::try_join!(balancer, cache_server)?;
+    let proxy = HttpServer::new(move || {
+        App::new()
+            .app_data(proxy_data.clone())
+            .service(get_proxy)
+            .service(post_proxy)
+    })
+    .bind(("127.0.0.1", args.proxy_port))?
+    .run();
+
+    futures::try_join!(balancer, cache_server, proxy)?;
 
     Ok(())
 }
