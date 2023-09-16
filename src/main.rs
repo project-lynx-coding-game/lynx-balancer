@@ -14,6 +14,7 @@ use cache_provider::{CacheGetRequest, CacheProvider, CacheSetRequest};
 use clap::Parser;
 use futures::lock::Mutex;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 struct AppState {
     // It's quite complex but Sync and Send traits mean
@@ -122,13 +123,13 @@ async fn post_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, b
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Port number
-    #[arg(default_value_t = 8080)]
+    #[arg(long, default_value_t = 8080)]
     port: u16,
     /// Port for cache server
-    #[arg(default_value_t = 8081)]
+    #[arg(long, default_value_t = 8081)]
     cache_port: u16,
     /// Port for proxy server
-    #[arg(default_value_t = 8082)]
+    #[arg(long, default_value_t = 8082)]
     proxy_port: u16,
 }
 
@@ -142,6 +143,7 @@ async fn main() -> std::io::Result<()> {
         Err(_) => println!("ERROR tracing could not be enabled!"),
     }
 
+    info!("Preparing `instance_host` and `url_cache`");
     let data = Data::new(Mutex::new(AppState {
         instance_host: Box::new(KubernetesHost::new()),
         url_cache: Box::new(LocalCache::new()),
