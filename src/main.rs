@@ -37,7 +37,7 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     match new_instance {
         Ok(instance) => {
             data.url_cache
-                .set("test-user".to_string(), instance.url.clone());
+                .set("test-user".to_string(), instance.url.clone()).await;
             HttpResponse::Ok().body(instance.url)
         }
         Err(e) => {
@@ -66,8 +66,8 @@ async fn cache_get(
     data: web::Data<Mutex<AppState>>,
     info: web::Query<CacheGetRequest<String>>,
 ) -> HttpResponse {
-    let data = data.lock().await;
-    let result = data.url_cache.get(&info.key);
+    let mut data = data.lock().await;
+    let result = data.url_cache.get(info.key.clone()).await;
     match result {
         Some(url) => HttpResponse::Ok()
             .content_type(ContentType::plaintext())
@@ -81,15 +81,15 @@ async fn cache_set(
     info: web::Query<CacheSetRequest<String, String>>,
 ) -> HttpResponse {
     let mut data = data.lock().await;
-    data.url_cache.set(info.key.clone(), info.value.clone());
+    data.url_cache.set(info.key.clone(), info.value.clone()).await;
     HttpResponse::Ok().finish()
 }
 
 #[get("/{tail:.*}")]
 async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
-    let data = data.lock().await;
-    let url = data.url_cache.get(&"test-user".to_string());
+    let mut data = data.lock().await;
+    let url = data.url_cache.get("test-user".to_string()).await;
     if let Some(url) = url {
         let client = awc::Client::default();
 
@@ -104,8 +104,8 @@ async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, by
 #[post("/{tail:.*}")]
 async fn post_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
-    let data = data.lock().await;
-    let url = data.url_cache.get(&"test-user".to_string());
+    let mut data = data.lock().await;
+    let url = data.url_cache.get("test-user".to_string()).await;
     if let Some(url) = url {
         let client = awc::Client::default();
 
