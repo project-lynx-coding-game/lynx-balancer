@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 pub mod local_cache;
+pub mod redis_cache;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CacheGetRequest<K> {

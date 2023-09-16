@@ -10,6 +10,7 @@ use actix_web::{web, App, HttpResponse, HttpServer, get, post};
 use actix_proxy::{IntoHttpResponse};
 use awc;
 use cache_provider::local_cache::LocalCache;
+use cache_provider::redis_cache::RedisCache;
 use cache_provider::{CacheGetRequest, CacheProvider, CacheSetRequest};
 use clap::Parser;
 use futures::lock::Mutex;
@@ -131,6 +132,9 @@ struct Args {
     /// Port for proxy server
     #[arg(long, default_value_t = 8082)]
     proxy_port: u16,
+    /// Not functional!!!
+    #[arg(long, default_value = "redis://my-redis-master.lynx-balancer.svc.cluster.local:6379")]
+    redis_url: String
 }
 
 #[actix_web::main]
@@ -146,7 +150,10 @@ async fn main() -> std::io::Result<()> {
     info!("Preparing `instance_host` and `url_cache`");
     let data = Data::new(Mutex::new(AppState {
         instance_host: Box::new(KubernetesHost::new()),
-        url_cache: Box::new(LocalCache::new()),
+        //url_cache: Box::new(LocalCache::new()),
+        //TODO: investigate Handle::block_on because
+        //I dont like having asyncronous new method
+        url_cache: Box::new(RedisCache::new(args.redis_url).await),
     }));
 
     let cache_server_data = data.clone();
