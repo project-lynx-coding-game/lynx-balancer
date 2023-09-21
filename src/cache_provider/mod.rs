@@ -1,6 +1,8 @@
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 pub mod local_cache;
+pub mod redis_cache;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CacheGetRequest<K> {
@@ -13,8 +15,9 @@ pub struct CacheSetRequest<K, V> {
     pub value: V,
 }
 
+#[async_trait]
 pub trait CacheProvider<K, V> {
-    fn set(&mut self, key: K, value: V);
-    fn get(&self, key: &K) -> Option<&V>;
-    fn remove(&mut self, key: &K);
+    async fn set(&mut self, key: K, value: V);
+    async fn get(&mut self, key: K) -> Option<V>;
+    async fn remove(&mut self, key: K);
 }
