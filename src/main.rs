@@ -1,6 +1,7 @@
 mod cache_provider;
 mod instance_host;
 
+use crate::instance_host::local_host::LocalHost;
 use crate::instance_host::kubernetes_host::KubernetesHost;
 use crate::instance_host::InstanceHost;
 
@@ -138,18 +139,31 @@ struct Args {
 
     #[arg(
         long,
-        require_equals = true,
         num_args = 0..=1,
         default_value_t = Cache::LocalCache,
         value_enum
     )]
     cache: Cache,
+
+    #[arg(
+        long,
+        num_args = 0..=1,
+        default_value_t = Host::Kubernetes,
+        value_enum
+    )]
+    host: Host,
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
 enum Cache {
     RedisCache,
     LocalCache
+}
+
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
+enum Host {
+    Localhost,
+    Kubernetes
 }
 
 #[actix_web::main]
@@ -164,7 +178,10 @@ async fn main() -> std::io::Result<()> {
 
     info!("Preparing `instance_host` and `url_cache`");
     let data = Data::new(Mutex::new(AppState {
-        instance_host: Box::new(KubernetesHost::new()),
+        instance_host: match args.host {
+            Host::Kubernetes => Box::new(KubernetesHost::new()),
+            Host::Localhost => Box::new(LocalHost::new())
+        },
         //url_cache: Box::new(LocalCache::new()),
         //TODO: investigate Handle::block_on because
         //I dont like having asyncronous new method

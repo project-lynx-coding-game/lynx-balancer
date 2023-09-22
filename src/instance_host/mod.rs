@@ -1,4 +1,5 @@
 pub mod kubernetes_host;
+pub mod local_host;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
