@@ -12,7 +12,7 @@ use awc;
 use cache_provider::local_cache::LocalCache;
 use cache_provider::redis_cache::RedisCache;
 use cache_provider::{CacheGetRequest, CacheProvider, CacheSetRequest};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use futures::lock::Mutex;
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -134,7 +134,22 @@ struct Args {
     proxy_port: u16,
     /// Not functional!!!
     #[arg(long, default_value = "redis://my-redis-master.lynx-balancer.svc.cluster.local:6379")]
-    redis_url: String
+    redis_url: String,
+
+    #[arg(
+        long,
+        require_equals = true,
+        num_args = 0..=1,
+        default_value_t = Cache::LocalCache,
+        value_enum
+    )]
+    cache: Cache,
+}
+
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
+enum Cache {
+    RedisCache,
+    LocalCache
 }
 
 #[actix_web::main]
@@ -153,7 +168,10 @@ async fn main() -> std::io::Result<()> {
         //url_cache: Box::new(LocalCache::new()),
         //TODO: investigate Handle::block_on because
         //I dont like having asyncronous new method
-        url_cache: Box::new(RedisCache::new(args.redis_url).await),
+        url_cache: match args.cache {
+            Cache::LocalCache => Box::new(LocalCache::new()),
+            Cache::RedisCache => Box::new(RedisCache::new(args.redis_url).await)
+        },
     }));
 
     let cache_server_data = data.clone();
