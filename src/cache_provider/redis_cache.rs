@@ -20,7 +20,7 @@ impl RedisCache {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<K: Sync + Send + ToRedisArgs + 'static, V: Sync + Send + ToRedisArgs + FromRedisValue + 'static>
     CacheProvider<K , V> for RedisCache
 {
@@ -41,6 +41,10 @@ impl<K: Sync + Send + ToRedisArgs + 'static, V: Sync + Send + ToRedisArgs + From
                 None
             },
         }
+    }
+
+    async fn get_or_query(&mut self, key: K) -> Option<V> {
+        self.get(key).await
     }
 
     async fn remove(&mut self, key: K) {
