@@ -23,6 +23,7 @@ struct AppState {
     // https://doc.rust-lang.org/nomicon/send-and-sync.html
     instance_host: Box<dyn InstanceHost + Sync + Send>,
     url_cache: Box<dyn CacheProvider<String, String> + Sync + Send>,
+    use_cache_query: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -91,7 +92,13 @@ async fn cache_set(
 async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
     let mut data = data.lock().await;
-    let url = data.url_cache.get("test-user".to_string()).await;
+    let url;
+    if data.use_cache_query {
+        url = data.url_cache.get_or_query("test-user".to_string()).await;
+    } else {
+        url = data.url_cache.get("test-user".to_string()).await;
+    }
+
     if let Some(url) = url {
         let client = awc::Client::default();
 
@@ -107,7 +114,13 @@ async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, by
 async fn post_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
     let mut data = data.lock().await;
-    let url = data.url_cache.get("test-user".to_string()).await;
+    let url;
+    if data.use_cache_query {
+        url = data.url_cache.get_or_query("test-user".to_string()).await;
+    } else {
+        url = data.url_cache.get("test-user".to_string()).await;
+    }
+
     if let Some(url) = url {
         let client = awc::Client::default();
 
@@ -134,7 +147,9 @@ struct Args {
     proxy_port: u16,
     /// Not functional!!!
     #[arg(long, default_value = "redis://my-redis-master.lynx-balancer.svc.cluster.local:6379")]
-    redis_url: String
+    redis_url: String,
+    #[arg(long)]
+    cache_query_url: Option<String>,
 }
 
 #[actix_web::main]
@@ -147,13 +162,25 @@ async fn main() -> std::io::Result<()> {
         Err(_) => println!("ERROR tracing could not be enabled!"),
     }
 
-    info!("Preparing `instance_host` and `url_cache`");
+    info!("Preparing `url_cache`");
+    let cache;
+    let cache_query = args.cache_query_url.is_some();
+    if let Some(cache_url) = args.cache_query_url {
+        info!("Using cache with query fallback");
+        cache = Box::new(LocalCache::new(Some(cache_url.to_string())));
+    } else {
+        info!("Using cache without query fallback");
+        cache = Box::new(LocalCache::new(None));
+    }
+    info!("Done Preparing `url_cache`");
+
     let data = Data::new(Mutex::new(AppState {
         instance_host: Box::new(KubernetesHost::new()),
-        //url_cache: Box::new(LocalCache::new()),
+        url_cache: cache,
+        use_cache_query: cache_query
         //TODO: investigate Handle::block_on because
         //I dont like having asyncronous new method
-        url_cache: Box::new(RedisCache::new(args.redis_url).await),
+        //url_cache: Box::new(RedisCache::new(args.redis_url).await),
     }));
 
     let cache_server_data = data.clone();
