@@ -186,7 +186,7 @@ async fn main() -> std::io::Result<()> {
                     .service(web::resource("/stop").route(web::post().to(stop_instance))),
             )
     })
-    .bind(("127.0.0.1", args.port))?
+    .bind(("0.0.0.0", args.port))?
     .run();
 
     let cache_server = HttpServer::new(move || {
@@ -196,7 +196,7 @@ async fn main() -> std::io::Result<()> {
                 .service(web::resource("/set").route(web::post().to(cache_set))),
         )
     })
-    .bind(("127.0.0.1", args.cache_port))?
+    .bind(("0.0.0.0", args.cache_port))?
     .run();
 
     let proxy = HttpServer::new(move || {
@@ -205,7 +205,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_proxy)
             .service(post_proxy)
     })
-    .bind(("127.0.0.1", args.proxy_port))?
+    .bind(("0.0.0.0", args.proxy_port))?
     .run();
 
     futures::try_join!(balancer, cache_server, proxy)?;
