@@ -4,10 +4,10 @@ mod instance_host;
 use crate::instance_host::kubernetes_host::KubernetesHost;
 use crate::instance_host::InstanceHost;
 
+use actix_proxy::IntoHttpResponse;
 use actix_web::http::header::ContentType;
-use actix_web::web::{Data, Bytes};
-use actix_web::{web, App, HttpResponse, HttpServer, get, post};
-use actix_proxy::{IntoHttpResponse};
+use actix_web::web::{Bytes, Data};
+use actix_web::{get, post, web, App, HttpResponse, HttpServer};
 use awc;
 use cache_provider::local_cache::LocalCache;
 use cache_provider::redis_cache::RedisCache;
@@ -23,6 +23,7 @@ struct AppState {
     // https://doc.rust-lang.org/nomicon/send-and-sync.html
     instance_host: Box<dyn InstanceHost + Sync + Send>,
     url_cache: Box<dyn CacheProvider<String, String> + Sync + Send>,
+    use_cache_query: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -39,7 +40,8 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     match new_instance {
         Ok(instance) => {
             data.url_cache
-                .set("test-user".to_string(), instance.url.clone()).await;
+                .set("test-user".to_string(), instance.url.clone())
+                .await;
             HttpResponse::Ok().body(instance.url)
         }
         Err(e) => {
@@ -49,9 +51,7 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     }
 }
 
-async fn stop_instance(
-    data: web::Data<Mutex<AppState>>,
-) -> HttpResponse {
+async fn stop_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     let data = data.lock().await;
     match data
         .instance_host
@@ -83,19 +83,37 @@ async fn cache_set(
     info: web::Query<CacheSetRequest<String, String>>,
 ) -> HttpResponse {
     let mut data = data.lock().await;
-    data.url_cache.set(info.key.clone(), info.value.clone()).await;
+    data.url_cache
+        .set(info.key.clone(), info.value.clone())
+        .await;
     HttpResponse::Ok().finish()
 }
 
 #[get("/{tail:.*}")]
-async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
+async fn get_proxy(
+    request: actix_web::HttpRequest,
+    data: web::Data<Mutex<AppState>>,
+    path: web::Path<String>,
+    bytes: Bytes,
+) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
     let mut data = data.lock().await;
-    let url = data.url_cache.get("test-user".to_string()).await;
+    let url;
+    if data.use_cache_query {
+        url = data.url_cache.get_or_query("test-user".to_string()).await;
+    } else {
+        url = data.url_cache.get("test-user".to_string()).await;
+    }
+
     if let Some(url) = url {
         let client = awc::Client::default();
 
-        let final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        let mut final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        if request.query_string() != "" {
+            final_url += "?";
+            final_url += request.query_string();
+        }
+
         let res = client.get(final_url).send_body(bytes).await.unwrap();
         res.into_http_response()
     } else {
@@ -104,14 +122,30 @@ async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, by
 }
 
 #[post("/{tail:.*}")]
-async fn post_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
+async fn post_proxy(
+    request: actix_web::HttpRequest,
+    data: web::Data<Mutex<AppState>>,
+    path: web::Path<String>,
+    bytes: Bytes,
+) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
     let mut data = data.lock().await;
-    let url = data.url_cache.get("test-user".to_string()).await;
+    let url;
+    if data.use_cache_query {
+        url = data.url_cache.get_or_query("test-user".to_string()).await;
+    } else {
+        url = data.url_cache.get("test-user".to_string()).await;
+    }
+
     if let Some(url) = url {
         let client = awc::Client::default();
 
-        let final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        let mut final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        if request.query_string() != "" {
+            final_url += "?";
+            final_url += request.query_string();
+        }
+
         let res = client.post(final_url).send_body(bytes).await.unwrap();
         res.into_http_response()
     } else {
@@ -133,8 +167,13 @@ struct Args {
     #[arg(long, default_value_t = 8082)]
     proxy_port: u16,
     /// Not functional!!!
-    #[arg(long, default_value = "redis://my-redis-master.lynx-balancer.svc.cluster.local:6379")]
+    #[arg(
+        long,
+        default_value = "redis://my-redis-master.lynx-balancer.svc.cluster.local:6379"
+    )]
     redis_url: String,
+    #[arg(long)]
+    cache_query_url: Option<String>,
 
     #[arg(
         long,
@@ -149,7 +188,7 @@ struct Args {
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
 enum Cache {
     RedisCache,
-    LocalCache
+    LocalCache,
 }
 
 #[actix_web::main]
@@ -165,12 +204,12 @@ async fn main() -> std::io::Result<()> {
     info!("Preparing `instance_host` and `url_cache`");
     let data = Data::new(Mutex::new(AppState {
         instance_host: Box::new(KubernetesHost::new()),
-        //url_cache: Box::new(LocalCache::new()),
+        use_cache_query: args.cache_query_url.is_some(),
         //TODO: investigate Handle::block_on because
         //I dont like having asyncronous new method
         url_cache: match args.cache {
-            Cache::LocalCache => Box::new(LocalCache::new()),
-            Cache::RedisCache => Box::new(RedisCache::new(args.redis_url).await)
+            Cache::LocalCache => Box::new(LocalCache::new(args.cache_query_url)),
+            Cache::RedisCache => Box::new(RedisCache::new(args.redis_url).await),
         },
     }));
 
@@ -178,13 +217,11 @@ async fn main() -> std::io::Result<()> {
     let proxy_data = data.clone();
 
     let balancer = HttpServer::new(move || {
-        App::new()
-            .app_data(data.clone())
-            .service(
-                web::scope("/instance")
-                    .service(web::resource("/start").route(web::post().to(start_instance)))
-                    .service(web::resource("/stop").route(web::post().to(stop_instance))),
-            )
+        App::new().app_data(data.clone()).service(
+            web::scope("/instance")
+                .service(web::resource("/start").route(web::post().to(start_instance)))
+                .service(web::resource("/stop").route(web::post().to(stop_instance))),
+        )
     })
     .bind(("0.0.0.0", args.port))?
     .run();

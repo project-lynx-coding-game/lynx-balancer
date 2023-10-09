@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use redis::{aio::Connection, RedisError, RedisResult};
 use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::cache_provider::CacheProvider;
 
@@ -14,21 +14,21 @@ impl RedisCache {
         let client = redis::Client::open(url).unwrap();
         let con = client.get_async_connection().await.unwrap();
 
-        RedisCache {
-            con: con,
-        }
+        RedisCache { con: con }
     }
 }
 
-#[async_trait]
-impl<K: Sync + Send + ToRedisArgs + 'static, V: Sync + Send + ToRedisArgs + FromRedisValue + 'static>
-    CacheProvider<K , V> for RedisCache
+#[async_trait(?Send)]
+impl<
+        K: Sync + Send + ToRedisArgs + 'static,
+        V: Sync + Send + ToRedisArgs + FromRedisValue + 'static,
+    > CacheProvider<K, V> for RedisCache
 {
     async fn set(&mut self, key: K, value: V) {
         let ret: Result<(), RedisError> = self.con.set(key, value).await;
         match ret {
             Ok(_) => (),
-            Err(e) => error!("Set failed at: {}", e)
+            Err(e) => error!("Set failed at: {}", e),
         }
     }
 
@@ -39,8 +39,12 @@ impl<K: Sync + Send + ToRedisArgs + 'static, V: Sync + Send + ToRedisArgs + From
             Err(e) => {
                 error!("Get failed at: {}", e);
                 None
-            },
+            }
         }
+    }
+
+    async fn get_or_query(&mut self, key: K) -> Option<V> {
+        self.get(key).await
     }
 
     async fn remove(&mut self, key: K) {
@@ -49,14 +53,14 @@ impl<K: Sync + Send + ToRedisArgs + 'static, V: Sync + Send + ToRedisArgs + From
             Ok(_) => (),
             Err(e) => {
                 error!("Get failed at: {}", e);
-            },
+            }
         }
     }
 }
 #[cfg(test)]
 mod tests {
-    use std::env;
     use serial_test::serial;
+    use std::env;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
@@ -64,8 +68,8 @@ mod tests {
     async fn get_cache() -> Box<dyn CacheProvider<String, i32>> {
         let password;
         match env::var("REDIS_PASSWORD") {
-            Ok(v) => password=v,
-            Err(_) => panic!("$REDIS_PASSWORD is not set!")
+            Ok(v) => password = v,
+            Err(_) => panic!("$REDIS_PASSWORD is not set!"),
         };
 
         let url = "redis://default:".to_string() + &password + "@127.0.0.1:6379";
