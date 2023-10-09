@@ -4,10 +4,10 @@ mod instance_host;
 use crate::instance_host::kubernetes_host::KubernetesHost;
 use crate::instance_host::InstanceHost;
 
+use actix_proxy::IntoHttpResponse;
 use actix_web::http::header::ContentType;
-use actix_web::web::{Data, Bytes};
-use actix_web::{web, App, HttpResponse, HttpServer, get, post};
-use actix_proxy::{IntoHttpResponse};
+use actix_web::web::{Bytes, Data};
+use actix_web::{get, post, web, App, HttpResponse, HttpServer};
 use awc;
 use cache_provider::local_cache::LocalCache;
 use cache_provider::redis_cache::RedisCache;
@@ -40,7 +40,8 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     match new_instance {
         Ok(instance) => {
             data.url_cache
-                .set("test-user".to_string(), instance.url.clone()).await;
+                .set("test-user".to_string(), instance.url.clone())
+                .await;
             HttpResponse::Ok().body(instance.url)
         }
         Err(e) => {
@@ -50,9 +51,7 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     }
 }
 
-async fn stop_instance(
-    data: web::Data<Mutex<AppState>>,
-) -> HttpResponse {
+async fn stop_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     let data = data.lock().await;
     match data
         .instance_host
@@ -84,7 +83,9 @@ async fn cache_set(
     info: web::Query<CacheSetRequest<String, String>>,
 ) -> HttpResponse {
     let mut data = data.lock().await;
-    data.url_cache.set(info.key.clone(), info.value.clone()).await;
+    data.url_cache
+        .set(info.key.clone(), info.value.clone())
+        .await;
     HttpResponse::Ok().finish()
 }
 
@@ -92,8 +93,9 @@ async fn cache_set(
 async fn get_proxy(
     request: actix_web::HttpRequest,
     data: web::Data<Mutex<AppState>>,
-    path: web::Path<String>, 
-    bytes: Bytes) -> HttpResponse {
+    path: web::Path<String>,
+    bytes: Bytes,
+) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
     let mut data = data.lock().await;
     let url;
@@ -107,7 +109,7 @@ async fn get_proxy(
         let client = awc::Client::default();
 
         let mut final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
-        if  request.query_string() != "" {
+        if request.query_string() != "" {
             final_url += "?";
             final_url += request.query_string();
         }
@@ -122,9 +124,10 @@ async fn get_proxy(
 #[post("/{tail:.*}")]
 async fn post_proxy(
     request: actix_web::HttpRequest,
-    data: web::Data<Mutex<AppState>>, 
-    path: web::Path<String>, 
-    bytes: Bytes) -> HttpResponse {
+    data: web::Data<Mutex<AppState>>,
+    path: web::Path<String>,
+    bytes: Bytes,
+) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
     let mut data = data.lock().await;
     let url;
@@ -138,11 +141,11 @@ async fn post_proxy(
         let client = awc::Client::default();
 
         let mut final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
-        if  request.query_string() != "" {
+        if request.query_string() != "" {
             final_url += "?";
             final_url += request.query_string();
         }
-        
+
         let res = client.post(final_url).send_body(bytes).await.unwrap();
         res.into_http_response()
     } else {
@@ -164,7 +167,10 @@ struct Args {
     #[arg(long, default_value_t = 8082)]
     proxy_port: u16,
     /// Not functional!!!
-    #[arg(long, default_value = "redis://my-redis-master.lynx-balancer.svc.cluster.local:6379")]
+    #[arg(
+        long,
+        default_value = "redis://my-redis-master.lynx-balancer.svc.cluster.local:6379"
+    )]
     redis_url: String,
     #[arg(long)]
     cache_query_url: Option<String>,
@@ -182,7 +188,7 @@ struct Args {
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
 enum Cache {
     RedisCache,
-    LocalCache
+    LocalCache,
 }
 
 #[actix_web::main]
@@ -203,7 +209,7 @@ async fn main() -> std::io::Result<()> {
         //I dont like having asyncronous new method
         url_cache: match args.cache {
             Cache::LocalCache => Box::new(LocalCache::new(args.cache_query_url)),
-            Cache::RedisCache => Box::new(RedisCache::new(args.redis_url).await)
+            Cache::RedisCache => Box::new(RedisCache::new(args.redis_url).await),
         },
     }));
 
@@ -211,13 +217,11 @@ async fn main() -> std::io::Result<()> {
     let proxy_data = data.clone();
 
     let balancer = HttpServer::new(move || {
-        App::new()
-            .app_data(data.clone())
-            .service(
-                web::scope("/instance")
-                    .service(web::resource("/start").route(web::post().to(start_instance)))
-                    .service(web::resource("/stop").route(web::post().to(stop_instance))),
-            )
+        App::new().app_data(data.clone()).service(
+            web::scope("/instance")
+                .service(web::resource("/start").route(web::post().to(start_instance)))
+                .service(web::resource("/stop").route(web::post().to(stop_instance))),
+        )
     })
     .bind(("0.0.0.0", args.port))?
     .run();
