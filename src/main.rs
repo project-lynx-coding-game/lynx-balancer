@@ -89,7 +89,11 @@ async fn cache_set(
 }
 
 #[get("/{tail:.*}")]
-async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
+async fn get_proxy(
+    request: actix_web::HttpRequest,
+    data: web::Data<Mutex<AppState>>,
+    path: web::Path<String>, 
+    bytes: Bytes) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
     let mut data = data.lock().await;
     let url;
@@ -102,7 +106,12 @@ async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, by
     if let Some(url) = url {
         let client = awc::Client::default();
 
-        let final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        let mut final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        if  request.query_string() != "" {
+            final_url += "?";
+            final_url += request.query_string();
+        }
+
         let res = client.get(final_url).send_body(bytes).await.unwrap();
         res.into_http_response()
     } else {
@@ -111,7 +120,11 @@ async fn get_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, by
 }
 
 #[post("/{tail:.*}")]
-async fn post_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, bytes: Bytes) -> HttpResponse {
+async fn post_proxy(
+    request: actix_web::HttpRequest,
+    data: web::Data<Mutex<AppState>>, 
+    path: web::Path<String>, 
+    bytes: Bytes) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
     let mut data = data.lock().await;
     let url;
@@ -124,7 +137,12 @@ async fn post_proxy(data: web::Data<Mutex<AppState>>, path: web::Path<String>, b
     if let Some(url) = url {
         let client = awc::Client::default();
 
-        let final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        let mut final_url = "http://".to_owned() + &url + "/" + &path.into_inner();
+        if  request.query_string() != "" {
+            final_url += "?";
+            final_url += request.query_string();
+        }
+        
         let res = client.post(final_url).send_body(bytes).await.unwrap();
         res.into_http_response()
     } else {
