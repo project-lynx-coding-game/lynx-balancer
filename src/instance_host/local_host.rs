@@ -1,15 +1,19 @@
 use crate::instance_host::{Instance, InstanceHost};
 
 use async_trait::async_trait;
-use std::process::Command;
-
+use std::process::{Command, Child};
 use tracing::info;
+use std::collections::HashMap;
 
-pub struct LocalHost {}
+pub struct LocalHost {
+    processes: HashMap<String, Child>
+}
 
 impl LocalHost {
     pub fn new() -> LocalHost {
-        LocalHost {}
+        LocalHost {
+            processes: HashMap::new()
+        }
     }
 }
 
@@ -19,16 +23,20 @@ impl InstanceHost for LocalHost {
         &mut self,
         username: String,
     ) -> Result<Instance, Box<dyn std::error::Error>> {
-        Command::new("sh")
+        // TODO: argument providing path to python entrypoint, execute
+        let child = Command::new("sh")
                 .arg("-c")
-                .arg("echo hello")
-                .output()
+                .arg("echo hello && sleep 30")
+                .spawn()
                 .expect("failed to execute process");
-        let instance = Instance::new("127.0.0.1".to_string(), 8555);
+        self.processes.insert(username.clone(), child);
+        let instance = Instance::new("0.0.0.0".to_string(), 8555);
         Ok(instance)
     }
 
-    async fn stop_instance(&self, username: String) -> Result<(), Box<dyn std::error::Error>> {
+    async fn stop_instance(&mut self, username: String) -> Result<(), Box<dyn std::error::Error>> {
+        let mut child = self.processes.get_mut(&username).expect("No process running");
+        child.kill().expect("cannot kill"); // TODO: change it to graceful exit, then kill if cannot exit gracefully
         Ok(())
     }
 }

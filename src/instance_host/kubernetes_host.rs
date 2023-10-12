@@ -103,7 +103,7 @@ impl InstanceHost for KubernetesHost {
         Ok(instance)
     }
 
-    async fn stop_instance(&self, username: String) -> Result<(), Box<dyn std::error::Error>> {
+    async fn stop_instance(&mut self, username: String) -> Result<(), Box<dyn std::error::Error>> {
         let client = kube::Client::try_default().await?;
         let jobs: Api<Job> = Api::default_namespaced(client);
 

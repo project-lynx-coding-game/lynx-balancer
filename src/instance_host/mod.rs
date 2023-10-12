@@ -22,5 +22,5 @@ pub trait InstanceHost {
         &mut self,
         username: String,
     ) -> Result<Instance, Box<dyn std::error::Error>>;
-    async fn stop_instance(&self, username: String) -> Result<(), Box<dyn std::error::Error>>;
+    async fn stop_instance(&mut self, username: String) -> Result<(), Box<dyn std::error::Error>>;
 }
