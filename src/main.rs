@@ -52,15 +52,10 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     }
 }
 
-<<<<<<< HEAD
 async fn stop_instance(
     data: web::Data<Mutex<AppState>>,
 ) -> HttpResponse {
     let mut data = data.lock().await;
-=======
-async fn stop_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
-    let data = data.lock().await;
->>>>>>> master
     match data
         .instance_host
         .stop_instance("test-user".to_string())
