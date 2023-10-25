@@ -193,6 +193,12 @@ struct Args {
         value_enum
     )]
     host: Host,
+
+    #[arg(
+        long,
+        default_value = ""
+    )]
+    app_path: String
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
@@ -211,6 +217,10 @@ enum Host {
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
+    if args.host == Host::Localhost && args.app_path == "" {
+        panic!("app_path must be specified when host is local host");
+    }
+
     let subscriber = tracing_subscriber::FmtSubscriber::new();
     match tracing::subscriber::set_global_default(subscriber) {
         Ok(_) => (),
@@ -221,7 +231,7 @@ async fn main() -> std::io::Result<()> {
     let data = Data::new(Mutex::new(AppState {
         instance_host: match args.host {
             Host::Kubernetes => Box::new(KubernetesHost::new()),
-            Host::Localhost => Box::new(LocalHost::new())
+            Host::Localhost => Box::new(LocalHost::new(args.app_path))
         },
         use_cache_query: args.cache_query_url.is_some(),
         //TODO: investigate Handle::block_on because

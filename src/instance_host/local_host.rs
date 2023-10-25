@@ -7,13 +7,15 @@ use tracing::info;
 use std::collections::HashMap;
 
 pub struct LocalHost {
-    processes: HashMap<String, Child>
+    processes: HashMap<String, Child>,
+    app_directory: String // we assume it is a FastAPI app (lynx-scene-host), uvicorn required
 }
 
 impl LocalHost {
-    pub fn new() -> LocalHost {
+    pub fn new(app_directory: String) -> LocalHost {
         LocalHost {
-            processes: HashMap::new()
+            processes: HashMap::new(),
+            app_directory
         }
     }
 }
@@ -40,7 +42,7 @@ impl InstanceHost for LocalHost {
         let port = get_available_port().expect("no available ports");
         let child = Command::new("sh")
                 .arg("-c")
-                .arg(format!("podman run -p {}:{} ghcr.io/group-project-gut/lynx-scene-host-python:latest main:app --port {} --host 0.0.0.0 --workers 1", port, port, port))
+                .arg(format!("cd {} && uvicorn main:app --port {} --host 0.0.0.0", self.app_directory, port))
                 .spawn()
                 .expect("failed to execute process");
         self.processes.insert(username.clone(), child);

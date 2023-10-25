@@ -16,6 +16,9 @@ RUN ls -la ./*
 
 RUN cargo build --target x86_64-unknown-linux-gnu --release
 
+# TODO: add pulling scene host image, unpacking to directory and copying to final image
+# also install in final image lynx common through pip, along with uvicorn
+
 ####################################################################################################
 ## Final image
 ####################################################################################################
