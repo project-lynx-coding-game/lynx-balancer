@@ -15,9 +15,10 @@ pub struct CacheSetRequest<K, V> {
     pub value: V,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait CacheProvider<K, V> {
     async fn set(&mut self, key: K, value: V);
     async fn get(&mut self, key: K) -> Option<V>;
+    async fn get_or_query(&mut self, key: K) -> Option<V>;
     async fn remove(&mut self, key: K);
 }
