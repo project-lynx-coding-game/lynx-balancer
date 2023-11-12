@@ -14,6 +14,10 @@ impl Instance {
     pub fn new(url: String, port: u16) -> Instance {
         Instance { url, port }
     }
+
+    pub fn get_url_with_port(&self) -> String {
+        self.url.clone() + ":" + &self.port.clone().to_string()
+    }
 }
 
 #[async_trait]

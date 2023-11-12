@@ -41,7 +41,7 @@ async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     match new_instance {
         Ok(instance) => {
             data.url_cache
-                .set("test-user".to_string(), instance.url.clone())
+                .set("test-user".to_string(), instance.get_url_with_port())
                 .await;
             HttpResponse::Ok().body(instance.url)
         }
@@ -139,7 +139,7 @@ async fn post_proxy(
     } else {
         url = data.url_cache.get("test-user".to_string()).await;
     }
-
+    println!("{:?}", url);
     if let Some(url) = url {
         let client = awc::Client::default();
 
