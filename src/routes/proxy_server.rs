@@ -14,6 +14,8 @@ pub async fn get_proxy(
     bytes: Bytes,
 ) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
+    // TODO: add username and token to request
+    // TODO: validate token
     let mut data = data.lock().await;
     let url;
     if data.use_cache_query {
@@ -46,6 +48,8 @@ pub async fn post_proxy(
     bytes: Bytes,
 ) -> HttpResponse {
     // TODO: unpacking username from http request will be different, it has to be planned out
+    // TODO: add username and token to request
+    // TODO: validate token
     let mut data = data.lock().await;
     let url;
     if data.use_cache_query {
