@@ -139,7 +139,6 @@ async fn post_proxy(
     } else {
         url = data.url_cache.get("test-user".to_string()).await;
     }
-    println!("{:?}", url);
     if let Some(url) = url {
         let client = awc::Client::default();
 
