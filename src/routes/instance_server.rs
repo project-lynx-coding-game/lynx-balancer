@@ -6,6 +6,7 @@ use futures::lock::Mutex;
 pub async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     // TODO: add username and token to request body
     // TODO: validate token
+    // TODO: check if already in cache
     let mut data = data.lock().await;
     let new_instance = data
         .instance_host
@@ -28,6 +29,7 @@ pub async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
 pub async fn stop_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     // TODO: add username and token to request body
     // TODO: validate token
+    // TODO: remove from cache
     let data = data.lock().await;
     match data
         .instance_host

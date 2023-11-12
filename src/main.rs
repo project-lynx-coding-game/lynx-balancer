@@ -1,10 +1,12 @@
+mod auth_manager;
 mod cache_provider;
 mod instance_host;
 mod routes;
 
+use crate::auth_manager::AuthManager;
 use crate::instance_host::kubernetes_host::KubernetesHost;
 use crate::instance_host::InstanceHost;
-use crate::routes::{cache_server, instance_server, proxy_server, auth};
+use crate::routes::{auth, cache_server, instance_server, proxy_server};
 
 use actix_web::web::Data;
 use actix_web::{web, App, HttpServer};
@@ -20,6 +22,7 @@ pub struct AppState {
     // that the impl can be moved across threads
     // https://doc.rust-lang.org/nomicon/send-and-sync.html
     instance_host: Box<dyn InstanceHost + Sync + Send>,
+    auth_manager: Box<dyn AuthManager + Sync + Send>,
     url_cache: Box<dyn CacheProvider<String, String> + Sync + Send>,
     use_cache_query: bool,
 }
@@ -88,20 +91,24 @@ async fn main() -> std::io::Result<()> {
     let proxy_data = data.clone();
 
     let balancer = HttpServer::new(move || {
-        App::new().app_data(data.clone()).service(
-            web::scope("/instance")
-                .service(
-                    web::resource("/start").route(web::post().to(instance_server::start_instance)),
-                )
-                .service(
-                    web::resource("/stop").route(web::post().to(instance_server::stop_instance)),
-                ),
-        )
-        .service(
-            web::scope("/auth")
-            .route("/register", web::post().to(auth::register))
-            .route("/login", web::post().to(auth::login)),
-        )
+        App::new()
+            .app_data(data.clone())
+            .service(
+                web::scope("/instance")
+                    .service(
+                        web::resource("/start")
+                            .route(web::post().to(instance_server::start_instance)),
+                    )
+                    .service(
+                        web::resource("/stop")
+                            .route(web::post().to(instance_server::stop_instance)),
+                    ),
+            )
+            .service(
+                web::scope("/auth")
+                    .route("/register", web::post().to(auth::register))
+                    .route("/login", web::post().to(auth::login)),
+            )
     })
     .bind(("0.0.0.0", args.port))?
     .run();

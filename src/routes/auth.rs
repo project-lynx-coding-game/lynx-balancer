@@ -22,7 +22,10 @@ pub struct AuthResponse {
     pub refresh_token: String,
 }
 
-pub async fn register(data: web::Data<Mutex<AppState>>, info: web::Json<RegisterPostRequest>) -> HttpResponse {
+pub async fn register(
+    data: web::Data<Mutex<AppState>>,
+    info: web::Json<RegisterPostRequest>,
+) -> HttpResponse {
     let mut data = data.lock().await;
     // TODO: check for already existing user
     // TODO: add user to database
