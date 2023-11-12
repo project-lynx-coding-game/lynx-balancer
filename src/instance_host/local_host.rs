@@ -38,7 +38,6 @@ impl InstanceHost for LocalHost {
         &mut self,
         username: String,
     ) -> Result<Instance, Box<dyn std::error::Error>> {
-        // TODO: if existing user, first kill previous
         let port = get_available_port().expect("no available ports");
         let child = Command::new("sh")
                 .arg("-c")

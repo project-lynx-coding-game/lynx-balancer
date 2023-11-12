@@ -34,6 +34,7 @@ struct UserGetRequest {
 
 async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     let mut data = data.lock().await;
+    // TODO: if existing user, first stop previous instance
     let new_instance = data
         .instance_host
         .start_instance("test-user".to_string())
@@ -56,6 +57,7 @@ async fn stop_instance(
     data: web::Data<Mutex<AppState>>,
 ) -> HttpResponse {
     let mut data = data.lock().await;
+    // TODO: save state of scene host?
     match data
         .instance_host
         .stop_instance("test-user".to_string())
