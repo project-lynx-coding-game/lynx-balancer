@@ -81,8 +81,8 @@ impl KubernetesHost {
 
         let p = pods.get(&name).await?;
         let status = p.status.unwrap();
-        let ip = status.pod_ip.unwrap() + ":8080";
-        info!("Pod created for {} was created at: {}", username, ip);
+        let ip = status.pod_ip.unwrap();
+        info!("Pod created for {} was created at: {}:{}", username, ip, 8080);
         Ok(ip)
     }
 }
