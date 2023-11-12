@@ -4,7 +4,7 @@ mod routes;
 
 use crate::instance_host::kubernetes_host::KubernetesHost;
 use crate::instance_host::InstanceHost;
-use crate::routes::{cache_server, instance_server, proxy_server};
+use crate::routes::{cache_server, server, proxy_server};
 
 use actix_web::web::Data;
 use actix_web::{web, App, HttpServer};
@@ -91,11 +91,16 @@ async fn main() -> std::io::Result<()> {
         App::new().app_data(data.clone()).service(
             web::scope("/instance")
                 .service(
-                    web::resource("/start").route(web::post().to(instance_server::start_instance)),
+                    web::resource("/start").route(web::post().to(server::start_instance)),
                 )
                 .service(
-                    web::resource("/stop").route(web::post().to(instance_server::stop_instance)),
+                    web::resource("/stop").route(web::post().to(server::stop_instance)),
                 ),
+        )
+        .service(
+            web::scope("/auth")
+            .route("/register", web::post().to(server::register))
+            .route("/login", web::post().to(server::login)),
         )
     })
     .bind(("0.0.0.0", args.port))?

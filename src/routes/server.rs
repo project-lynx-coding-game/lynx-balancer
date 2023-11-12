@@ -3,6 +3,16 @@ use crate::AppState;
 use actix_web::{web, HttpResponse};
 use futures::lock::Mutex;
 
+pub async fn register(data: web::Data<Mutex<AppState>>) -> HttpResponse {
+    let mut data = data.lock().await;
+    HttpResponse::Ok().body("registration complete")
+}
+
+pub async fn login(data: web::Data<Mutex<AppState>>) -> HttpResponse {
+    let mut data = data.lock().await;
+    HttpResponse::Ok().body("login complete")
+}
+
 pub async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     let mut data = data.lock().await;
     let new_instance = data
