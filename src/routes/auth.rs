@@ -16,27 +16,23 @@ pub struct RegisterPostRequest {
     pub password: String, // hashed
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct AuthResponse {
-    pub access_token: String,
-    pub refresh_token: String,
-}
-
 pub async fn register(
     data: web::Data<Mutex<AppState>>,
     info: web::Json<RegisterPostRequest>,
 ) -> HttpResponse {
     let mut data = data.lock().await;
-    // TODO: check for already existing user
-    // TODO: add user to database
-    // TODO: generate tokens and return AuthResponse
-    HttpResponse::Ok().body("registration complete")
+    let ret = data.auth_manager.register(info.username.clone(), info.password.clone()).await;
+    match ret {
+        Err(e) => HttpResponse::BadRequest().body(e.to_string()),
+        Ok(token) => HttpResponse::Ok().body(token),
+    }
 }
 
-pub async fn login(data: web::Data<Mutex<AppState>>) -> HttpResponse {
+pub async fn login(data: web::Data<Mutex<AppState>>, info: web::Json<LoginPostRequest>) -> HttpResponse {
     let mut data = data.lock().await;
-    // TODO: check if user exists, if not error
-    // TODO: check hashed password, if bad return error
-    // TODO: generate tokens and return AuthResponse
-    HttpResponse::Ok().body("login complete")
+    let ret = data.auth_manager.login(info.username.clone(), info.password.clone()).await;
+    match ret {
+        Err(e) => HttpResponse::BadRequest().body(e.to_string()),
+        Ok(token) => HttpResponse::Ok().body(token),
+    }
 }

@@ -7,28 +7,13 @@ use actix_web::{web, HttpResponse};
 
 use jwt_simple::prelude::*;
 
-pub fn create_jwt(username: &str) -> Result<String> {
-    let expiration = Utc::now()
-        .checked_add_signed(chrono::Duration::seconds(60))
-        .expect("valid timestamp")
-        .timestamp();
-
-    let claims = Claims {
-        sub: uid.to_owned(),
-        role: role.to_string(),
-        exp: expiration as usize,
-    };
-    let header = Header::new(Algorithm::HS512);
-    encode(&header, &claims, &EncodingKey::from_secret(JWT_SECRET))
-        .map_err(|_| Error::JWTTokenCreationError)
-}
-
 pub struct RedisAuthManager {
     con: Connection,
 }
 
 impl RedisAuthManager {
     pub async fn new(url: String) -> RedisAuthManager {
+        println!("{}", url);
         let client = redis::Client::open(url).unwrap();
         let con = client.get_async_connection().await.unwrap();
 
@@ -36,35 +21,47 @@ impl RedisAuthManager {
     }
 }
 
+// Two entries are created:
+// <username> - <password>
+// <username>_key - <key>
+// requires separate redis instance from cache
+
 #[async_trait]
 impl AuthManager for RedisAuthManager {
     async fn register(
-        &self,
+        &mut self,
         username: String,
         password: String,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // TODO: check for already existing user
-        // TODO: add user to database
-        // TODO: generate tokens and return AuthResponse
-        let _: String = self.con.get(&username).await.expect("User already exists");
-
-        let ret: Result<(), RedisError> = self.con.set(username, password).await;
-        match ret {
-            Ok(_) => (),
-            Err(e) => return Err("Error creating user".into()),
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let ret: RedisResult<String> = self.con.get(&username).await;
+        if let Ok(_) = ret {
+            return Err("User already exists".into());
         }
 
+        let ret: Result<(), RedisError> = self.con.set(&username, password).await;
+        if let Err(e) = ret {
+            return Err(("Error creating user: ".to_owned() + &e.to_string()).into());
+        }
 
-        Ok(())
+        let key = HS256Key::generate();
+        let ret: Result<(), RedisError> = self.con.set(username + "_key", key.to_bytes()).await;
+        let claims = Claims::create(Duration::from_hours(2));
+        let token = key.authenticate(claims)?;
+        Ok(token)
     }
     async fn login(
         &mut self,
         username: String,
         password: String,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // TODO: check if user exists, if not error
-        // TODO: check hashed password, if bad return error
-        // TODO: generate tokens and return AuthResponse
-        Ok(())
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let pass: String = self.con.get(&username).await.expect("User does not exist.");
+        if pass != password {
+            return Err("Wrong password".into());
+        }
+        let ret: Vec<u8> = self.con.get(username + "_key").await.unwrap();
+        let key = HS256Key::from_bytes(&ret);
+        let claims = Claims::create(Duration::from_hours(2));
+        let token = key.authenticate(claims)?;
+        Ok(token)
     }
 }

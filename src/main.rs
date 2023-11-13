@@ -4,6 +4,7 @@ mod instance_host;
 mod routes;
 
 use crate::auth_manager::AuthManager;
+use crate::auth_manager::redis_auth_manager::RedisAuthManager;
 use crate::instance_host::kubernetes_host::KubernetesHost;
 use crate::instance_host::InstanceHost;
 use crate::routes::{auth, cache_server, instance_server, proxy_server};
@@ -57,6 +58,11 @@ struct Args {
         value_enum
     )]
     cache: Cache,
+
+    #[arg(
+        long,
+    )]
+    auth_redis_url: String,
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
@@ -78,6 +84,7 @@ async fn main() -> std::io::Result<()> {
     info!("Preparing `instance_host` and `url_cache`");
     let data = Data::new(Mutex::new(AppState {
         instance_host: Box::new(KubernetesHost::new()),
+        auth_manager: Box::new(RedisAuthManager::new(args.auth_redis_url).await),
         use_cache_query: args.cache_query_url.is_some(),
         //TODO: investigate Handle::block_on because
         //I dont like having asyncronous new method

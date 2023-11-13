@@ -1,4 +1,4 @@
-mod redis_auth_manager;
+pub mod redis_auth_manager;
 
 use async_trait::async_trait;
 use redis::{aio::Connection, RedisError, RedisResult};
@@ -11,10 +11,10 @@ pub trait AuthManager {
         &mut self,
         username: String,
         password: String,
-    ) -> Result<(), Box<dyn std::error::Error>>;
+    ) -> Result<String, Box<dyn std::error::Error>>;
     async fn register(
-        &self,
+        &mut self,
         username: String,
         password: String,
-    ) -> Result<(), Box<dyn std::error::Error>>;
+    ) -> Result<String, Box<dyn std::error::Error>>;
 }
