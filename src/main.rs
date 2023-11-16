@@ -11,6 +11,10 @@ use crate::routes::{auth, cache_server, instance_server, proxy_server};
 
 use actix_web::web::Data;
 use actix_web::{web, App, HttpServer};
+use actix_session::{ SessionMiddleware, Session };
+use actix_session::config::{ BrowserSession, CookieContentSecurity };
+use actix_session::storage::{ CookieSessionStore };
+use actix_web::cookie::{ Key, SameSite };
 use cache_provider::local_cache::LocalCache;
 use cache_provider::redis_cache::RedisCache;
 use cache_provider::CacheProvider;
@@ -62,13 +66,25 @@ struct Args {
     #[arg(
         long,
     )]
-    auth_redis_url: String,
+    auth_redis_url: String, //TODO: Add auth switch
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
 enum Cache {
     RedisCache,
     LocalCache,
+}
+
+fn session_middleware() -> SessionMiddleware<CookieSessionStore> {
+    SessionMiddleware::builder(
+	    CookieSessionStore::default(), Key::from(&[0; 64])
+    )
+	.cookie_name(String::from("session-cookie"))
+	.session_lifecycle(BrowserSession::default())
+	.cookie_same_site(SameSite::Strict) 
+	.cookie_content_security(CookieContentSecurity::Private)
+	.cookie_http_only(true)
+	.build()
 }
 
 #[actix_web::main]
@@ -114,8 +130,9 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/auth")
                     .route("/register", web::post().to(auth::register))
-                    .route("/login", web::post().to(auth::login)),
-            )
+                    .route("/login", web::post().to(auth::login))
+                    .route("/logout", web::post().to(auth::logout)),
+            ).wrap(session_middleware())
     })
     .bind(("0.0.0.0", args.port))?
     .run();
@@ -125,7 +142,7 @@ async fn main() -> std::io::Result<()> {
             web::scope("/cache")
                 .service(web::resource("/get").route(web::get().to(cache_server::cache_get)))
                 .service(web::resource("/set").route(web::post().to(cache_server::cache_set))),
-        )
+        ).wrap(session_middleware())
     })
     .bind(("0.0.0.0", args.cache_port))?
     .run();
