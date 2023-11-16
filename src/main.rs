@@ -5,6 +5,7 @@ mod routes;
 
 use crate::auth_manager::AuthManager;
 use crate::auth_manager::redis_auth_manager::RedisAuthManager;
+use crate::instance_host::local_host::LocalHost;
 use crate::instance_host::kubernetes_host::KubernetesHost;
 use crate::instance_host::InstanceHost;
 use crate::routes::{auth, cache_server, instance_server, proxy_server};
@@ -56,7 +57,6 @@ struct Args {
 
     #[arg(
         long,
-        require_equals = true,
         num_args = 0..=1,
         default_value_t = Cache::LocalCache,
         value_enum
@@ -65,7 +65,18 @@ struct Args {
 
     #[arg(
         long,
+        num_args = 0..=1,
+        default_value_t = Host::Kubernetes,
+        value_enum
     )]
+    host: Host,
+
+    #[arg(
+        long,
+        default_value = ""
+    )]
+    app_path: String,
+
     auth_redis_url: String, //TODO: Add auth switch
 }
 
@@ -87,9 +98,20 @@ fn session_middleware() -> SessionMiddleware<CookieSessionStore> {
 	.build()
 }
 
+
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
+enum Host {
+    Localhost,
+    Kubernetes
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
+
+    if args.host == Host::Localhost && args.app_path == "" {
+        panic!("app_path must be specified when host is local host");
+    }
 
     let subscriber = tracing_subscriber::FmtSubscriber::new();
     match tracing::subscriber::set_global_default(subscriber) {
@@ -99,7 +121,10 @@ async fn main() -> std::io::Result<()> {
 
     info!("Preparing `instance_host` and `url_cache`");
     let data = Data::new(Mutex::new(AppState {
-        instance_host: Box::new(KubernetesHost::new()),
+        instance_host: match args.host {
+            Host::Kubernetes => Box::new(KubernetesHost::new()),
+            Host::Localhost => Box::new(LocalHost::new(args.app_path))
+        },
         auth_manager: Box::new(RedisAuthManager::new(args.auth_redis_url).await),
         use_cache_query: args.cache_query_url.is_some(),
         //TODO: investigate Handle::block_on because

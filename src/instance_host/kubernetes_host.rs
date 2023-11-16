@@ -81,8 +81,8 @@ impl KubernetesHost {
 
         let p = pods.get(&name).await?;
         let status = p.status.unwrap();
-        let ip = status.pod_ip.unwrap() + ":8080";
-        info!("Pod created for {} was created at: {}", username, ip);
+        let ip = status.pod_ip.unwrap();
+        info!("Pod created for {} was created at: {}:{}", username, ip, 8080);
         Ok(ip)
     }
 }
@@ -103,7 +103,7 @@ impl InstanceHost for KubernetesHost {
         Ok(instance)
     }
 
-    async fn stop_instance(&self, username: String) -> Result<(), Box<dyn std::error::Error>> {
+    async fn stop_instance(&mut self, username: String) -> Result<(), Box<dyn std::error::Error>> {
         let client = kube::Client::try_default().await?;
         let jobs: Api<Job> = Api::default_namespaced(client);
 

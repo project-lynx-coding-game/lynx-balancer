@@ -16,12 +16,26 @@ RUN ls -la ./*
 
 RUN cargo build --target x86_64-unknown-linux-gnu --release
 
+
+
+####################################################################################################
+## Scene host
+####################################################################################################
+FROM ghcr.io/group-project-gut/lynx-scene-host-python:latest AS scenehost
+
+
 ####################################################################################################
 ## Final image
 ####################################################################################################
-FROM debian:bookworm-slim
+FROM python:3.10-slim-bookworm
 
 RUN apt-get update -y && apt-get install -y libssl-dev
+
+### scene host stuff
+COPY --from=scenehost /scene-host /scene-host
+RUN apt-get install git -y
+RUN pip install -r /scene-host/requirements.txt
+###
 
 # Create appuser
 ENV USER=lynx-balancer
@@ -44,4 +58,4 @@ COPY --from=builder /lynx-balancer/target/x86_64-unknown-linux-gnu/release/lynx-
 # Use an unprivileged user.
 USER lynx-balancer:lynx-balancer
 
-ENTRYPOINT ["/lynx-balancer/lynx-balancer"]
+ENTRYPOINT ["/lynx-balancer/lynx-balancer", "--app-path", "/scene-host"]

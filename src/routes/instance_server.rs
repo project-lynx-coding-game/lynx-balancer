@@ -11,6 +11,7 @@ pub async fn start_instance(data: web::Data<Mutex<AppState>>, session: Session) 
     };
 
     // TODO: check if already in cache
+    // TODO: if existing user, first stop previous instance
     let new_instance = data
         .instance_host
         .start_instance("test-user".to_string())
@@ -18,7 +19,7 @@ pub async fn start_instance(data: web::Data<Mutex<AppState>>, session: Session) 
     match new_instance {
         Ok(instance) => {
             data.url_cache
-                .set("test-user".to_string(), instance.url.clone())
+                .set("test-user".to_string(), instance.get_url_with_port())
                 .await;
             HttpResponse::Ok().body(instance.url)
         }
@@ -35,6 +36,7 @@ pub async fn stop_instance(data: web::Data<Mutex<AppState>>, session: Session) -
         return HttpResponse::BadRequest().body(e.to_string())
     };
     // TODO: remove from cache
+    // TODO: save state of scene host?
     match data
         .instance_host
         .stop_instance("test-user".to_string())
