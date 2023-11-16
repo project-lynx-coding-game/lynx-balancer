@@ -1,4 +1,5 @@
 pub mod kubernetes_host;
+pub mod local_host;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,10 @@ impl Instance {
     pub fn new(url: String, port: u16) -> Instance {
         Instance { url, port }
     }
+
+    pub fn get_url_with_port(&self) -> String {
+        self.url.clone() + ":" + &self.port.clone().to_string()
+    }
 }
 
 #[async_trait]
@@ -21,5 +26,5 @@ pub trait InstanceHost {
         &mut self,
         username: String,
     ) -> Result<Instance, Box<dyn std::error::Error>>;
-    async fn stop_instance(&self, username: String) -> Result<(), Box<dyn std::error::Error>>;
+    async fn stop_instance(&mut self, username: String) -> Result<(), Box<dyn std::error::Error>>;
 }
