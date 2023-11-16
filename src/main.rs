@@ -77,7 +77,10 @@ struct Args {
     )]
     app_path: String,
 
-    auth_redis_url: String, //TODO: Add auth switch
+    #[arg(
+        long,
+    )]
+    auth_redis_url: String,
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
@@ -167,7 +170,7 @@ async fn main() -> std::io::Result<()> {
             web::scope("/cache")
                 .service(web::resource("/get").route(web::get().to(cache_server::cache_get)))
                 .service(web::resource("/set").route(web::post().to(cache_server::cache_set))),
-        ).wrap(session_middleware())
+        )
     })
     .bind(("0.0.0.0", args.cache_port))?
     .run();
@@ -177,6 +180,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(proxy_data.clone())
             .service(proxy_server::get_proxy)
             .service(proxy_server::post_proxy)
+            .wrap(session_middleware())
     })
     .bind(("0.0.0.0", args.proxy_port))?
     .run();

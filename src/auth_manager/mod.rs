@@ -25,7 +25,7 @@ pub trait AuthManager {
     ) -> Result<(), Box<dyn std::error::Error>>;
 }
 
-pub async fn authorize_from_session(session: Session, auth_manager: &mut Box<dyn AuthManager + Sync + Send>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn authorize_from_session(session: &Session, auth_manager: &mut Box<dyn AuthManager + Sync + Send>) -> Result<(), Box<dyn std::error::Error>> {
     let ret = session.get::<String>("session_token");
     if let Err(_) = ret {
         return Err("Cannot get session token".into());

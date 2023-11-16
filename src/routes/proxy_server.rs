@@ -1,10 +1,11 @@
-use crate::AppState;
+use crate::{AppState, auth_manager};
 
 use actix_proxy::IntoHttpResponse;
 use actix_web::web::Bytes;
 use actix_web::{get, post, web, HttpResponse};
 use awc;
 use futures::lock::Mutex;
+use actix_session::Session;
 
 #[get("/{tail:.*}")]
 pub async fn get_proxy(
@@ -12,16 +13,21 @@ pub async fn get_proxy(
     data: web::Data<Mutex<AppState>>,
     path: web::Path<String>,
     bytes: Bytes,
+    session: Session
 ) -> HttpResponse {
-    // TODO: unpacking username from http request will be different, it has to be planned out
-    // TODO: add username and token to request
-    // TODO: validate token
     let mut data = data.lock().await;
+
+    if let Err(e) = auth_manager::authorize_from_session(&session, &mut data.auth_manager).await {
+        return HttpResponse::BadRequest().body(e.to_string())
+    };
+
+    let username = session.get::<String>("session_username").unwrap().unwrap();
+
     let url;
     if data.use_cache_query {
-        url = data.url_cache.get_or_query("test-user".to_string()).await;
+        url = data.url_cache.get_or_query(username).await;
     } else {
-        url = data.url_cache.get("test-user".to_string()).await;
+        url = data.url_cache.get(username).await;
     }
 
     if let Some(url) = url {
@@ -46,16 +52,22 @@ pub async fn post_proxy(
     data: web::Data<Mutex<AppState>>,
     path: web::Path<String>,
     bytes: Bytes,
+    session: Session
 ) -> HttpResponse {
-    // TODO: unpacking username from http request will be different, it has to be planned out
-    // TODO: add username and token to request
-    // TODO: validate token
     let mut data = data.lock().await;
+
+    if let Err(e) = auth_manager::authorize_from_session(&session, &mut data.auth_manager).await {
+        return HttpResponse::BadRequest().body(e.to_string())
+    };
+
+    let username = session.get::<String>("session_username").unwrap().unwrap();
+
+
     let url;
     if data.use_cache_query {
-        url = data.url_cache.get_or_query("test-user".to_string()).await;
+        url = data.url_cache.get_or_query(username).await;
     } else {
-        url = data.url_cache.get("test-user".to_string()).await;
+        url = data.url_cache.get(username).await;
     }
 
     if let Some(url) = url {

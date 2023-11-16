@@ -6,20 +6,22 @@ use futures::lock::Mutex;
 
 pub async fn start_instance(data: web::Data<Mutex<AppState>>, session: Session) -> HttpResponse {
     let mut data = data.lock().await;
-    if let Err(e) = auth_manager::authorize_from_session(session, &mut data.auth_manager).await {
+    if let Err(e) = auth_manager::authorize_from_session(&session, &mut data.auth_manager).await {
         return HttpResponse::BadRequest().body(e.to_string())
     };
+
+    let username = session.get::<String>("session_username").unwrap().unwrap();
 
     // TODO: check if already in cache
     // TODO: if existing user, first stop previous instance
     let new_instance = data
         .instance_host
-        .start_instance("test-user".to_string())
+        .start_instance(username.clone())
         .await;
     match new_instance {
         Ok(instance) => {
             data.url_cache
-                .set("test-user".to_string(), instance.get_url_with_port())
+                .set(username, instance.get_url_with_port())
                 .await;
             HttpResponse::Ok().body(instance.url)
         }
@@ -32,14 +34,17 @@ pub async fn start_instance(data: web::Data<Mutex<AppState>>, session: Session) 
 
 pub async fn stop_instance(data: web::Data<Mutex<AppState>>, session: Session) -> HttpResponse {
     let mut data = data.lock().await;
-    if let Err(e) = auth_manager::authorize_from_session(session, &mut data.auth_manager).await {
+    if let Err(e) = auth_manager::authorize_from_session(&session, &mut data.auth_manager).await {
         return HttpResponse::BadRequest().body(e.to_string())
     };
+
+    let username = session.get::<String>("session_username").unwrap().unwrap();
+
     // TODO: remove from cache
     // TODO: save state of scene host?
     match data
         .instance_host
-        .stop_instance("test-user".to_string())
+        .stop_instance(username)
         .await
     {
         Ok(_) => (),
