@@ -1,10 +1,10 @@
 pub mod redis_auth_manager;
 
+use actix_session::{Session, SessionGetError};
 use async_trait::async_trait;
 use redis::{aio::Connection, RedisError, RedisResult};
 use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
 use serde::{Deserialize, Serialize};
-use actix_session::{Session, SessionGetError};
 
 #[async_trait]
 pub trait AuthManager {
@@ -25,7 +25,10 @@ pub trait AuthManager {
     ) -> Result<(), Box<dyn std::error::Error>>;
 }
 
-pub async fn authorize_from_session(session: &Session, auth_manager: &mut Box<dyn AuthManager + Sync + Send>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn authorize_from_session(
+    session: &Session,
+    auth_manager: &mut Box<dyn AuthManager + Sync + Send>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let ret = session.get::<String>("session_token");
     if let Err(_) = ret {
         return Err("Cannot get session token".into());

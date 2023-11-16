@@ -1,10 +1,10 @@
 use crate::auth_manager::AuthManager;
 
+use actix_session::Session;
+use actix_web::{web, HttpResponse};
 use async_trait::async_trait;
 use redis::{aio::Connection, RedisError, RedisResult};
 use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
-use actix_web::{web, HttpResponse};
-use actix_session::Session;
 
 use jwt_simple::prelude::*;
 
@@ -23,9 +23,8 @@ impl RedisAuthManager {
 }
 
 // Two entries are created:
-// <username> - <password>
+// <username>_pass - <password>
 // <username>_key - <key>
-// requires separate redis instance from cache
 
 #[async_trait]
 impl AuthManager for RedisAuthManager {
@@ -34,18 +33,25 @@ impl AuthManager for RedisAuthManager {
         username: String,
         password: String,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let ret: RedisResult<String> = self.con.get(&username).await;
+        if username.contains("_") {
+            return Err("Username contains illegal character: _".into());
+        }
+
+        let ret: RedisResult<String> = self.con.get(username.clone() + "_pass").await;
         if let Ok(_) = ret {
             return Err("User already exists".into());
         }
 
-        let ret: Result<(), RedisError> = self.con.set(&username, password).await;
+        let ret: Result<(), RedisError> = self.con.set(username.clone() + "_pass", password).await;
         if let Err(e) = ret {
             return Err(("Error creating user: ".to_owned() + &e.to_string()).into());
         }
 
         let key = HS256Key::generate();
-        let ret: Result<(), RedisError> = self.con.set(username + "_key", key.to_bytes()).await;
+        let ret: Result<(), RedisError> = self
+            .con
+            .set(username.clone() + "_key", key.to_bytes())
+            .await;
         let claims = Claims::create(Duration::from_hours(2));
         let token = key.authenticate(claims)?;
         Ok(token)
@@ -55,11 +61,15 @@ impl AuthManager for RedisAuthManager {
         username: String,
         password: String,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let pass: String = self.con.get(&username).await.expect("User does not exist.");
+        let ret: Result<String, RedisError> = self.con.get(username.clone() + "_pass").await;
+        if let Err(e) = ret {
+            return Err("User does not exist".into());
+        }
+        let pass = ret.unwrap();
         if pass != password {
             return Err("Wrong password".into());
         }
-        let ret: Vec<u8> = self.con.get(username + "_key").await.unwrap();
+        let ret: Vec<u8> = self.con.get(username.clone() + "_key").await.unwrap();
         let key = HS256Key::from_bytes(&ret);
         let claims = Claims::create(Duration::from_hours(2));
         let token = key.authenticate(claims)?;
@@ -75,7 +85,7 @@ impl AuthManager for RedisAuthManager {
         let key = HS256Key::from_bytes(&ret);
         match key.verify_token::<NoCustomClaims>(&token, None) {
             Ok(_) => Ok(()),
-            Err(_) => Err("invalid token".into())
+            Err(_) => Err("invalid token".into()),
         }
     }
 }
