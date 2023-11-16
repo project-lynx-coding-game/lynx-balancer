@@ -32,6 +32,7 @@ pub async fn register(
         Err(e) => HttpResponse::BadRequest().body(e.to_string()),
         Ok(token) => {
             session.insert("session_token", &token).expect("Cannot set session cookie");
+            session.insert("session_username", &info.username).expect("Cannot set session username");
             HttpResponse::Ok().body(token)
         },
     }
@@ -48,6 +49,7 @@ pub async fn login(data: web::Data<Mutex<AppState>>, info: web::Json<LoginPostRe
         Err(e) => HttpResponse::BadRequest().body(e.to_string()),
         Ok(token) => {
             session.insert("session_token", &token).expect("Cannot set session cookie");
+            session.insert("session_username", &info.username).expect("Cannot set session username");
             HttpResponse::Ok().body(token)
         },
     }
@@ -59,7 +61,10 @@ pub async fn logout(data: web::Data<Mutex<AppState>>, session: Session) -> HttpR
     }
 
     match session.remove("session_token") {
-        Some(_) => HttpResponse::Ok().body(()),
+        Some(_) => {
+            session.remove("session_username");
+            HttpResponse::Ok().body(())
+        },
         None => HttpResponse::BadRequest().body("Not logged in"),
     }
 }

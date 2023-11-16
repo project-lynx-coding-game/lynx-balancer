@@ -1,13 +1,16 @@
-use crate::AppState;
+use crate::{AppState, auth_manager};
 
 use actix_web::{web, HttpResponse};
+use actix_session::Session;
 use futures::lock::Mutex;
 
-pub async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
-    // TODO: add username and token to request body
-    // TODO: validate token
-    // TODO: check if already in cache
+pub async fn start_instance(data: web::Data<Mutex<AppState>>, session: Session) -> HttpResponse {
     let mut data = data.lock().await;
+    if let Err(e) = auth_manager::authorize_from_session(session, &mut data.auth_manager).await {
+        return HttpResponse::BadRequest().body(e.to_string())
+    };
+
+    // TODO: check if already in cache
     let new_instance = data
         .instance_host
         .start_instance("test-user".to_string())
@@ -26,11 +29,12 @@ pub async fn start_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
     }
 }
 
-pub async fn stop_instance(data: web::Data<Mutex<AppState>>) -> HttpResponse {
-    // TODO: add username and token to request body
-    // TODO: validate token
+pub async fn stop_instance(data: web::Data<Mutex<AppState>>, session: Session) -> HttpResponse {
+    let mut data = data.lock().await;
+    if let Err(e) = auth_manager::authorize_from_session(session, &mut data.auth_manager).await {
+        return HttpResponse::BadRequest().body(e.to_string())
+    };
     // TODO: remove from cache
-    let data = data.lock().await;
     match data
         .instance_host
         .stop_instance("test-user".to_string())

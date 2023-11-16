@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use redis::{aio::Connection, RedisError, RedisResult};
 use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
 use actix_web::{web, HttpResponse};
+use actix_session::Session;
 
 use jwt_simple::prelude::*;
 
@@ -63,5 +64,18 @@ impl AuthManager for RedisAuthManager {
         let claims = Claims::create(Duration::from_hours(2));
         let token = key.authenticate(claims)?;
         Ok(token)
+    }
+
+    async fn validate_token(
+        &mut self,
+        username: String,
+        token: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let ret: Vec<u8> = self.con.get(username + "_key").await.unwrap();
+        let key = HS256Key::from_bytes(&ret);
+        match key.verify_token::<NoCustomClaims>(&token, None) {
+            Ok(_) => Ok(()),
+            Err(_) => Err("invalid token".into())
+        }
     }
 }
