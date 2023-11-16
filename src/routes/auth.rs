@@ -73,7 +73,7 @@ pub async fn login(
     }
 }
 
-pub async fn logout(data: web::Data<Mutex<AppState>>, session: Session) -> HttpResponse {
+pub async fn logout(_data: web::Data<Mutex<AppState>>, session: Session) -> HttpResponse {
     if let Err(_) = session.get::<String>("session_token") {
         return HttpResponse::BadRequest().body("Not logged in");
     }

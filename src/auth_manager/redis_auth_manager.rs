@@ -1,10 +1,10 @@
 use crate::auth_manager::AuthManager;
 
-use actix_session::Session;
-use actix_web::{web, HttpResponse};
+
+
 use async_trait::async_trait;
 use redis::{aio::Connection, RedisError, RedisResult};
-use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
+use redis::{AsyncCommands};
 
 use jwt_simple::prelude::*;
 
@@ -48,7 +48,7 @@ impl AuthManager for RedisAuthManager {
         }
 
         let key = HS256Key::generate();
-        let ret: Result<(), RedisError> = self
+        let _ret: Result<(), RedisError> = self
             .con
             .set(username.clone() + "_key", key.to_bytes())
             .await;
@@ -62,7 +62,7 @@ impl AuthManager for RedisAuthManager {
         password: String,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let ret: Result<String, RedisError> = self.con.get(username.clone() + "_pass").await;
-        if let Err(e) = ret {
+        if let Err(_e) = ret {
             return Err("User does not exist".into());
         }
         let pass = ret.unwrap();

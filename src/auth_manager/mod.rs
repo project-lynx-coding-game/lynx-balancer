@@ -1,10 +1,8 @@
 pub mod redis_auth_manager;
 
-use actix_session::{Session, SessionGetError};
+use actix_session::Session;
 use async_trait::async_trait;
-use redis::{aio::Connection, RedisError, RedisResult};
-use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
-use serde::{Deserialize, Serialize};
+
 
 #[async_trait]
 pub trait AuthManager {

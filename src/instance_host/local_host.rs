@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::process::{Child, Command};
-use tracing::info;
+
 
 pub struct LocalHost {
     processes: HashMap<String, Child>,
@@ -52,7 +52,7 @@ impl InstanceHost for LocalHost {
     }
 
     async fn stop_instance(&mut self, username: String) -> Result<(), Box<dyn std::error::Error>> {
-        let mut child = self
+        let child = self
             .processes
             .get_mut(&username)
             .expect("No process running");
