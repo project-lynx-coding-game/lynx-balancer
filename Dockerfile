@@ -21,7 +21,7 @@ RUN cargo build --target x86_64-unknown-linux-gnu --release
 ####################################################################################################
 ## Scene host
 ####################################################################################################
-FROM ghcr.io/group-project-gut/lynx-scene-host-python:latest AS scenehost
+FROM ghcr.io/project-lynx-coding-game/lynx-scene-host-python:latest AS scenehost
 
 
 ####################################################################################################

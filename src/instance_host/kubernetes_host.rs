@@ -36,7 +36,7 @@ impl KubernetesHost {
                     "spec": {
                         "containers": [{
                             "name": "scene-host",
-                            "image": "ghcr.io/group-project-gut/lynx-scene-host-python:latest",
+                            "image": "ghcr.io/project-lynx-coding-game/lynx-scene-host-python:latest",
                             "args": ["main:app", "--port", "8080", "--host", "0.0.0.0", "--workers", "1"],
                             "ports": [{"containerPort": 8080}],
                             "env": [{
