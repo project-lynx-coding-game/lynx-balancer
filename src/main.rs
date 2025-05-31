@@ -1,12 +1,19 @@
+mod auth_manager;
 mod cache_provider;
 mod instance_host;
 mod routes;
 
-use crate::instance_host::local_host::LocalHost;
+use crate::auth_manager::redis_auth_manager::RedisAuthManager;
+use crate::auth_manager::AuthManager;
 use crate::instance_host::kubernetes_host::KubernetesHost;
+use crate::instance_host::local_host::LocalHost;
 use crate::instance_host::InstanceHost;
-use crate::routes::{cache_server, instance_server, proxy_server};
+use crate::routes::{auth, cache_server, instance_server, proxy_server};
 
+use actix_session::config::{BrowserSession, CookieContentSecurity};
+use actix_session::storage::CookieSessionStore;
+use actix_session::SessionMiddleware;
+use actix_web::cookie::{Key, SameSite};
 use actix_web::web::Data;
 use actix_web::{web, App, HttpServer};
 use cache_provider::local_cache::LocalCache;
@@ -21,6 +28,7 @@ pub struct AppState {
     // that the impl can be moved across threads
     // https://doc.rust-lang.org/nomicon/send-and-sync.html
     instance_host: Box<dyn InstanceHost + Sync + Send>,
+    auth_manager: Box<dyn AuthManager + Sync + Send>,
     url_cache: Box<dyn CacheProvider<String, String> + Sync + Send>,
     use_cache_query: bool,
 }
@@ -63,11 +71,8 @@ struct Args {
     )]
     host: Host,
 
-    #[arg(
-        long,
-        default_value = ""
-    )]
-    app_path: String
+    #[arg(long, default_value = "")]
+    app_path: String,
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
@@ -76,10 +81,20 @@ enum Cache {
     LocalCache,
 }
 
+fn session_middleware() -> SessionMiddleware<CookieSessionStore> {
+    SessionMiddleware::builder(CookieSessionStore::default(), Key::from(&[0; 64]))
+        .cookie_name(String::from("session-cookie"))
+        .session_lifecycle(BrowserSession::default())
+        .cookie_same_site(SameSite::Strict)
+        .cookie_content_security(CookieContentSecurity::Private)
+        .cookie_http_only(true)
+        .build()
+}
+
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
 enum Host {
     Localhost,
-    Kubernetes
+    Kubernetes,
 }
 
 #[actix_web::main]
@@ -100,8 +115,9 @@ async fn main() -> std::io::Result<()> {
     let data = Data::new(Mutex::new(AppState {
         instance_host: match args.host {
             Host::Kubernetes => Box::new(KubernetesHost::new()),
-            Host::Localhost => Box::new(LocalHost::new(args.app_path))
+            Host::Localhost => Box::new(LocalHost::new(args.app_path)),
         },
+        auth_manager: Box::new(RedisAuthManager::new(args.redis_url.clone()).await),
         use_cache_query: args.cache_query_url.is_some(),
         //TODO: investigate Handle::block_on because
         //I dont like having asyncronous new method
@@ -115,15 +131,26 @@ async fn main() -> std::io::Result<()> {
     let proxy_data = data.clone();
 
     let balancer = HttpServer::new(move || {
-        App::new().app_data(data.clone()).service(
-            web::scope("/instance")
-                .service(
-                    web::resource("/start").route(web::post().to(instance_server::start_instance)),
-                )
-                .service(
-                    web::resource("/stop").route(web::post().to(instance_server::stop_instance)),
-                ),
-        )
+        App::new()
+            .app_data(data.clone())
+            .service(
+                web::scope("/instance")
+                    .service(
+                        web::resource("/start")
+                            .route(web::post().to(instance_server::start_instance)),
+                    )
+                    .service(
+                        web::resource("/stop")
+                            .route(web::post().to(instance_server::stop_instance)),
+                    ),
+            )
+            .service(
+                web::scope("/auth")
+                    .route("/register", web::post().to(auth::register))
+                    .route("/login", web::post().to(auth::login))
+                    .route("/logout", web::post().to(auth::logout)),
+            )
+            .wrap(session_middleware())
     })
     .bind(("0.0.0.0", args.port))?
     .run();
@@ -143,6 +170,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(proxy_data.clone())
             .service(proxy_server::get_proxy)
             .service(proxy_server::post_proxy)
+            .wrap(session_middleware())
     })
     .bind(("0.0.0.0", args.proxy_port))?
     .run();

@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4"
+actix-session = { version = "0.8.0", features = ["cookie-session"] }
 async-trait = "0.1.72"
 clap = { version = "4.3.19", features = ["derive"] }
 futures = "0.3.28"
@@ -22,6 +23,7 @@ tokio = { version="1.31.0", features=["rt", "macros"]}
 awc = "3.2.0"
 actix-proxy = "0.2.0"
 serial_test = "2.0.0"
+jwt-simple = "0.11.9"
 
 [dependencies.redis]
 version = "0.23.3"

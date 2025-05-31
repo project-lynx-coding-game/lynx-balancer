@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use redis::{aio::Connection, RedisError, RedisResult};
 use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
-use tracing::{error, info};
+use tracing::{error};
 
 use crate::cache_provider::CacheProvider;
 
